@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Test coverage
+coverage/
+
+# Build
+dist/
+
+# Environment
+.env
+
+# Database
+*.db
+*.db-shm
+*.db-wal
+
+# Storage
+storage/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+

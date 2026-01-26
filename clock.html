@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSS 绘制动态时钟</title>
+    <style>
+        /* 页面基础样式：居中显示时钟 */
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f0f2f5;
+        }
+
+        /* 时钟外层容器：圆形边框 + 玻璃反光效果 */
+        .clock {
+            width: 300px;
+            height: 300px;
+            border-radius: 50%; /* 圆形表盘 */
+            border: 10px solid #fff;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1), 
+                        inset 0 0 10px rgba(0, 0, 0, 0.05); /* 外阴影 + 内阴影 */
+            position: relative;
+            background-color: rgba(255, 255, 255, 0.8); /* 半透明背景（玻璃态基础） */
+            backdrop-filter: blur(5px); /* 玻璃模糊效果（需浏览器支持） */
+        }
+
+        /* 表盘刻度：12个大刻度（对应12小时） */
+        .clock .scale {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            width: 2px;
+            height: 12px;
+            background-color: #333;
+            transform-origin: bottom center; /* 旋转原点：表盘中心（底部） */
+            transform: translateX(-50%); /* 水平居中 */
+        }
+
+        /* 表盘数字：1-12小时标记 */
+        .clock .number {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            line-height: 30px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+            transform-origin: bottom center; /* 数字旋转原点：表盘中心 */
+            transform: translateX(-50%); /* 水平居中 */
+        }
+
+        /* 时钟指针：公共样式（绝对定位 + 旋转原点） */
+        .clock .hand {
+            position: absolute;
+            bottom: 50%; /* 指针底部对齐表盘中心 */
+            left: 50%;
+            transform-origin: bottom center; /* 旋转原点：指针底部（表盘中心） */
+            border-radius: 4px 4px 0 0; /* 指针顶部圆角 */
+        }
+
+        /* 秒针样式：细、长、红色 */
+        .clock .second-hand {
+            width: 1px;
+            height: 120px;
+            background-color: #ff4444;
+            /* 视频提及“切掉顶部部分”：通过高度控制（总长度120px，底部从中心向上） */
+        }
+
+        /* 分针样式：宽于秒针，顶部变细（用clip-path实现） */
+        .clock .minute-hand {
+            width: 3px;
+            height: 100px;
+            background-color: #333;
+            /* clip-path 调整顶部宽度（视频提及的“顶部变细”效果） */
+            clip-path: polygon(0 0, 100% 0, 80% 100%, 20% 100%);
+        }
+
+        /* 时针样式：宽于分针，长度 shorter */
+        .clock .hour-hand {
+            width: 5px;
+            height: 80px;
+            background-color: #666;
+            /* 与分针类似的顶部变细效果 */
+            clip-path: polygon(0 0, 100% 0, 70% 100%, 30% 100%);
+        }
+
+        /* 表盘中心圆点：覆盖指针底部 */
+        .clock .center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #333;
+            transform: translate(-50%, -50%);
+        }
+    </style>
+</head>
+<body>
+    <!-- 时钟容器 -->
+    <div class="clock">
+        <!-- 表盘中心圆点 -->
+        <div class="center-dot"></div>
+        <!-- 时钟指针（JS动态控制旋转） -->
+        <div class="hand second-hand"></div>
+        <div class="hand minute-hand"></div>
+        <div class="hand hour-hand"></div>
+        <!-- 刻度和数字将通过JS动态生成（12个小时） -->
+    </div>
+
+    <script>
+        // 1. 生成表盘刻度（12个）和数字（1-12）
+        const clock = document.querySelector('.clock');
+        for (let i = 0; i < 12; i++) {
+            // 计算每个刻度的旋转角度：360度 / 12 = 30度/个
+            const angle = i * 30;
+
+            // 创建刻度元素
+            const scale = document.createElement('div');
+            scale.className = 'scale';
+            scale.style.transform = `translateX(-50%) rotate(${angle}deg)`; // 旋转对应角度
+            clock.appendChild(scale);
+
+            // 创建数字元素（1-12，对应i=0→12，i=1→1，...，i=11→11）
+            const number = document.createElement('div');
+            number.className = 'number';
+            number.textContent = i === 0 ? 12 : i; // i=0时显示12，其余显示i
+            // 数字旋转：先随刻度旋转angle度，再反向旋转angle度（视频提及“数字不随刻度翻转”）
+            number.style.transform = `translateX(-50%) rotate(${angle}deg)`;
+            // 内部文字反向旋转（确保数字正立）：给数字添加内层容器
+            const numberInner = document.createElement('div');
+            numberInner.textContent = number.textContent;
+            numberInner.style.transform = `rotate(${-angle}deg)`; // 反向旋转抵消外层旋转
+            number.innerHTML = ''; // 清空原内容
+            number.appendChild(numberInner);
+            clock.appendChild(number);
+        }
+
+        // 2. 时钟指针动态旋转逻辑（视频核心：秒针6°/秒，分针6°/分，时针30°/时）
+        function updateClock() {
+            const now = new Date();
+            const seconds = now.getSeconds();
+            const minutes = now.getMinutes();
+            const hours = now.getHours() % 12; // 12小时制
+
+            // 计算各指针旋转角度：
+            // - 秒针：360°/60秒 = 6°/秒
+            const secondAngle = seconds * 6;
+            // - 分针：360°/60分 = 6°/分（+ 秒针带动的微小偏移，可选）
+            const minuteAngle = minutes * 6 + seconds * 0.1; // 0.1° = 6°/60秒（可选平滑效果）
+            // - 时针：360°/12时 = 30°/时（+ 分针带动的偏移）
+            const hourAngle = hours * 30 + minutes * 0.5; // 0.5° = 30°/60分
+
+            // 应用旋转角度到指针
+            document.querySelector('.second-hand').style.transform = `translateX(-50%) rotate(${secondAngle}deg)`;
+            document.querySelector('.minute-hand').style.transform = `translateX(-50%) rotate(${minuteAngle}deg)`;
+            document.querySelector('.hour-hand').style.transform = `translateX(-50%) rotate(${hourAngle}deg)`;
+        }
+
+        // 初始化时钟（立即执行一次）
+        updateClock();
+        // 每秒更新一次（视频提及“函数每秒执行一次”）
+        setInterval(updateClock, 1000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,1319 @@
+<template>
+  <div class="company-files-page page-content-enter">
+    <div class="container">
+      <!-- 顶部标题 -->
+      <header class="header fade-in-up">
+        <h1>{{ t('workspace.companyFilesPage.title') }}</h1>
+        <p>{{ t('workspace.companyFilesPage.subtitle') }}</p>
+      </header>
+
+      <!-- 顶部分类卡片 -->
+      <div class="category-grid fade-in-delay-1">
+        <div
+          v-for="cat in categoryConfigs"
+          :key="cat.key"
+          class="cat-card"
+          :class="{ active: activeCategory === cat.key }"
+          @click="handleCategoryClick(cat.key)"
+        >
+          <div class="cat-icon">
+            <el-icon>
+              <component :is="cat.icon" />
+            </el-icon>
+          </div>
+          <h3>{{ cat.title }}</h3>
+          <p>{{ cat.desc }}</p>
+        </div>
+      </div>
+
+      <!-- 内容区域 -->
+      <div class="content-area fade-in-delay-2">
+        <!-- 顶部筛选 + 返回 + 搜索 + 操作 -->
+        <div class="content-nav">
+          <div class="nav-left">
+            <el-button
+              v-if="pathSegments.length"
+              class="back-btn"
+              text
+              size="small"
+              :icon="ArrowLeft"
+              @click="goBack"
+            >
+              返回上一级
+            </el-button>
+            <div
+              v-if="isAtCategoryRoot"
+              class="series-tabs"
+            >
+            <div
+                v-for="tab in visibleSeriesTabs"
+                :key="tab.key"
+                class="s-tab"
+                :class="{ active: activeSeries === tab.key }"
+                @click="activeSeries = tab.key"
+              >
+                {{ tab.label }}
+              </div>
+            </div>
+          </div>
+
+          <div class="nav-right">
+            <el-input
+              v-model="searchKeyword"
+              class="search-input"
+              placeholder="搜索文件名称或关键词..."
+              clearable
+            />
+            <el-button
+              type="primary"
+              size="small"
+              :icon="Upload"
+              @click="showUploadDialog = true"
+            >
+              上传文件
+            </el-button>
+            <el-button
+              size="small"
+              :icon="FolderAdd"
+              @click="showCreateFolderDialog = true"
+            >
+              新建文件夹
+            </el-button>
+          </div>
+        </div>
+
+        <!-- 文件网格 -->
+        <div class="file-grid" v-loading="loading">
+          <div
+            v-for="item in filteredFiles"
+            :key="item.path"
+            class="file-item"
+          >
+            <div class="file-preview" @dblclick="handleOpen(item)">
+              <template v-if="item.isDirectory">
+                📂
+              </template>
+              <template v-else-if="item.isImage">
+                <img
+                  v-if="getPreviewThumbnail(item)"
+                  :src="getPreviewThumbnail(item)"
+                  alt="thumb"
+                />
+                <span v-else>🖼️</span>
+              </template>
+              <template v-else-if="item.isVideo">
+                🎬
+              </template>
+              <template v-else-if="item.isPdf">
+                📄
+              </template>
+              <template v-else>
+                📎
+              </template>
+
+              <span
+                v-if="!item.isDirectory && getTypeBadge(item)"
+                class="type-badge"
+                :class="getTypeBadge(item)?.cls"
+              >
+                {{ getTypeBadge(item)?.text }}
+              </span>
+            </div>
+
+            <h4 class="file-name" :title="getDisplayName(item)">
+              {{ getDisplayName(item) }}
+            </h4>
+            <p class="file-meta">
+              <template v-if="!item.isDirectory">
+                {{ formatFileSize(item.size) }} · {{ formatDate(item.modified) }}
+              </template>
+              <template v-else>
+                文件夹
+              </template>
+            </p>
+
+            <div class="file-actions">
+              <template v-if="item.isDirectory">
+                <button class="btn-sm btn-view" @click="navigateToPath(item.path)">
+                  打开文件夹
+                </button>
+                <el-dropdown
+                  class="more-dropdown"
+                  trigger="click"
+                  @command="command => handleMoreCommand(command, item)"
+                >
+                  <span class="btn-sm btn-more">
+                    <el-icon><MoreFilled /></el-icon>
+                  </span>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                      <el-dropdown-item command="delete">删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+              <template v-else>
+                <button class="btn-sm btn-view" @click="handlePreview(item)">
+                  {{ item.isVideo ? '播放' : '预览' }}
+                </button>
+                <button class="btn-sm btn-down" @click="handleDownload(item)">
+                  下载
+                </button>
+                <el-dropdown
+                  class="more-dropdown"
+                  trigger="click"
+                  @command="command => handleMoreCommand(command, item)"
+                >
+                  <span class="btn-sm btn-more">
+                    <el-icon><MoreFilled /></el-icon>
+                  </span>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                      <el-dropdown-item command="delete">删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+              </template>
+            </div>
+          </div>
+
+          <el-empty
+            v-if="!loading && filteredFiles.length === 0"
+            :description="$t('common.noData')"
+            class="empty-state"
+          />
+        </div>
+      </div>
+
+      <!-- 新建文件夹弹窗 -->
+      <el-dialog
+        v-model="showCreateFolderDialog"
+        title="新建文件夹"
+        width="420px"
+        :close-on-click-modal="false"
+      >
+        <el-form label-position="top">
+          <el-form-item v-if="isAtCategoryRoot" label="类型 / Type">
+            <el-select
+              v-model="selectedSeriesForFolder"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="选择或输入类型，例如：日更素材 / 海外 / 电商主图"
+            >
+              <el-option
+                v-for="opt in seriesOptionsForCurrentCategory"
+                :key="opt.slug"
+                :label="opt.label"
+                :value="opt.slug"
+              />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="文件夹名称">
+            <el-input
+              v-model="newFolderName"
+              placeholder="请输入文件夹名称"
+            />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showCreateFolderDialog = false">{{ $t('common.cancel') }}</el-button>
+          <el-button type="primary" :loading="savingFolder" @click="handleCreateFolder">
+            {{ $t('common.confirm') }}
+          </el-button>
+        </template>
+      </el-dialog>
+
+      <!-- 上传文件弹窗 -->
+      <el-dialog
+        v-model="showUploadDialog"
+        title="上传文件"
+        width="460px"
+        :close-on-click-modal="false"
+      >
+        <div class="upload-form">
+          <el-form label-position="top">
+            <el-form-item v-if="isAtCategoryRoot" label="类型 / Type">
+              <el-select
+                v-model="selectedSeriesForUpload"
+                filterable
+                allow-create
+                default-first-option
+                placeholder="选择或输入类型，例如：日更素材 / 海外 / 电商主图"
+              >
+                <el-option
+                  v-for="opt in seriesOptionsForCurrentCategory"
+                  :key="opt.slug"
+                  :label="opt.label"
+                  :value="opt.slug"
+                />
+              </el-select>
+            </el-form-item>
+          </el-form>
+        </div>
+        <el-upload
+          drag
+          :auto-upload="false"
+          :file-list="uploadFileList"
+          :on-change="handleUploadChange"
+          :on-remove="handleUploadRemove"
+        >
+          <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+          <div class="el-upload__text">
+            将文件拖到此处，或点击上传
+          </div>
+        </el-upload>
+        <template #footer>
+          <el-button @click="showUploadDialog = false">{{ $t('common.cancel') }}</el-button>
+          <el-button type="primary" :loading="uploading" @click="handleUploadSubmit">
+            开始上传
+          </el-button>
+        </template>
+      </el-dialog>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { UploadUserFile } from 'element-plus'
+import {
+  Upload,
+  UploadFilled,
+  FolderAdd,
+  Folder,
+  FolderOpened,
+  Document,
+  Download,
+  Delete,
+  Edit,
+  List,
+  Grid,
+  ArrowLeft,
+  MoreFilled,
+  Picture,
+  VideoCamera,
+  Promotion,
+  Collection,
+} from '@element-plus/icons-vue'
+import {
+  getFileList,
+  createFolder,
+  uploadFile,
+  deleteFile,
+  renameFile,
+  downloadFile,
+  getPreviewUrl,
+  type FileItem,
+} from '../api/files'
+import { getWorkspaceStorageConfigs, type WorkspaceStorageConfig } from '../api/workspace-storage'
+import {
+  getCompanyFileCategories,
+  getCompanyFileSeries,
+  type CompanyFileCategory,
+  type CompanyFileSeries,
+} from '../api/company-files'
+
+const { t, locale } = useI18n()
+
+// 默认盘符 & 根目录（如后台未配置时使用）
+const DEFAULT_DRIVE_ID = ((import.meta as any).env?.VITE_WORKSPACE_DRIVE_ID as string | undefined)?.toLowerCase?.() || 'd'
+const DEFAULT_ROOT_PATH = 'company-files'
+
+// 从后台可配置的存储位置
+const driveId = ref<string>(DEFAULT_DRIVE_ID)
+const rootPath = ref<string>(DEFAULT_ROOT_PATH)
+
+// 后端可配置的分类和系列
+const categories = ref<CompanyFileCategory[]>([])
+const activeCategory = ref<string>('specs')
+const loading = ref(false)
+const fileList = ref<FileItem[]>([])
+const currentPath = ref('') // 相对于当前分区根的路径
+
+interface SeriesTab {
+  key: string
+  label: string
+  slug: string
+  categoryKey?: string
+}
+
+// 系列筛选 & 搜索
+const seriesTabs = ref<SeriesTab[]>([])
+const activeSeries = ref('all')
+const searchKeyword = ref('')
+
+// 针对当前大类可选的类型（左侧 Tab 同源）
+const seriesOptionsForCurrentCategory = computed(() =>
+  seriesTabs.value.filter(
+    (t) => t.key !== 'all' && t.categoryKey === activeCategory.value,
+  ),
+)
+
+// 左侧展示用的 Tab 列表（只显示当前大类的类型）
+const visibleSeriesTabs = computed(() =>
+  seriesTabs.value.filter(
+    (t) => t.key === 'all' || t.categoryKey === activeCategory.value,
+  ),
+)
+
+// 文件夹相关状态
+const showCreateFolderDialog = ref(false)
+const newFolderName = ref('')
+const savingFolder = ref(false)
+
+// 上传相关状态
+const showUploadDialog = ref(false)
+const uploadFileList = ref<UploadUserFile[]>([])
+const uploading = ref(false)
+const selectedSeriesForUpload = ref('')
+const selectedSeriesForFolder = ref('')
+
+// 顶部展示用的分类卡片（已适配中英双语 & 后端配置）
+const categoryConfigs = computed(() => {
+  const localeIsZh = locale.value.startsWith('zh')
+
+  // 如果后端还没返回，就用默认 5 大类兜底
+  const source: Array<CompanyFileCategory & { icon?: string; folder: string }> =
+    categories.value.length
+      ? categories.value
+      : [
+          {
+            id: 1,
+            key: 'specs',
+            nameZh: '产品规格书',
+            nameEn: 'Product Specs',
+            descZh: '公司各类产品最新规格书',
+            descEn: 'Latest specification sheets for all products.',
+            icon: 'specs',
+            folder: 'specs',
+            sortOrder: 1,
+            enabled: true,
+          },
+          {
+            id: 2,
+            key: 'images',
+            nameZh: '图片素材',
+            nameEn: 'Image Assets',
+            descZh: '公司产品图片、案例图片等',
+            descEn: 'Product photos, case images and more.',
+            icon: 'images',
+            folder: 'images',
+            sortOrder: 2,
+            enabled: true,
+          },
+          {
+            id: 3,
+            key: 'videos',
+            nameZh: '视频素材',
+            nameEn: 'Video Assets',
+            descZh: '产品视频、宣传片、活动视频等',
+            descEn: 'Product videos, promos and event footage.',
+            icon: 'videos',
+            folder: 'videos',
+            sortOrder: 3,
+            enabled: true,
+          },
+          {
+            id: 4,
+            key: 'marketing',
+            nameZh: '推广素材',
+            nameEn: 'Marketing Assets',
+            descZh: '每日推广、社媒推广素材',
+            descEn: 'Daily promotions and social media materials.',
+            icon: 'marketing',
+            folder: 'marketing',
+            sortOrder: 4,
+            enabled: true,
+          },
+          {
+            id: 5,
+            key: 'brand',
+            nameZh: '品牌物料',
+            nameEn: 'Brand Assets',
+            descZh: 'LOGO、证书、其他文件等',
+            descEn: 'Logos, certificates and other brand files.',
+            icon: 'brand',
+            folder: 'brand',
+            sortOrder: 5,
+            enabled: true,
+          },
+        ]
+
+  // 统一的 UI 文案（不受后端数据库影响）
+  const uiTextMap: Record<
+    string,
+    { titleZh: string; titleEn: string; descZh: string; descEn: string }
+  > = {
+    specs: {
+      titleZh: '产品规格书',
+      titleEn: 'Product Specs',
+      descZh: '公司各类产品最新规格书',
+      descEn: 'Latest specification sheets for all products.',
+    },
+    images: {
+      titleZh: '图片素材',
+      titleEn: 'Image Assets',
+      descZh: '公司产品图片、案例图片等',
+      descEn: 'Product photos, case images and more.',
+    },
+    videos: {
+      titleZh: '视频素材',
+      titleEn: 'Video Assets',
+      descZh: '产品视频、宣传片、活动视频等',
+      descEn: 'Product videos, promos and event footage.',
+    },
+    marketing: {
+      titleZh: '推广素材',
+      titleEn: 'Marketing Assets',
+      descZh: '每日推广、社媒推广素材',
+      descEn: 'Daily promotions and social media materials.',
+    },
+    brand: {
+      titleZh: '品牌物料',
+      titleEn: 'Brand Assets',
+      descZh: 'LOGO、证书、其他文件等',
+      descEn: 'Logos, certificates and other brand files.',
+    },
+  }
+
+  const iconMap: Record<string, any> = {
+    specs: Document,
+    images: Picture,
+    videos: VideoCamera,
+    marketing: Promotion,
+    brand: Collection,
+  }
+
+  return source.map((c) => ({
+    key: c.key,
+    icon: iconMap[c.key] || FolderOpened,
+    title: (() => {
+      const ui = uiTextMap[c.key]
+      const titleZh = ui?.titleZh || c.nameZh || c.nameEn
+      const titleEn = ui?.titleEn || c.nameEn || c.nameZh
+      return localeIsZh ? titleZh || titleEn : titleEn || titleZh
+    })(),
+    desc: (() => {
+      const ui = uiTextMap[c.key]
+      const descZh = ui?.descZh || c.descZh || c.descEn || ''
+      const descEn = ui?.descEn || c.descEn || c.descZh || ''
+      return localeIsZh ? descZh || descEn : descEn || descZh
+    })(),
+    folder: c.folder,
+  }))
+})
+
+const activeCategoryConfig = computed<CompanyFileCategory | null>(() => {
+  if (!categories.value.length) return null
+  return categories.value.find(c => c.key === activeCategory.value) || categories.value[0]
+})
+
+// 当前分区 + 路径组合成实际后端路径
+const fullPath = computed(() => {
+  const cat = activeCategoryConfig.value
+  const folder = cat?.folder || 'specs'
+  const base = `${rootPath.value}/${folder}`
+  return currentPath.value ? `${base}/${currentPath.value}` : base
+})
+
+// 面包屑
+const pathSegments = computed(() => {
+  if (!currentPath.value) return []
+  return currentPath.value.split('/').filter(Boolean)
+})
+
+// 是否在当前大类的根目录（没有进入任何子文件夹）
+const isAtCategoryRoot = computed(() => pathSegments.value.length === 0)
+
+const getPathUpToIndex = (index: number) => {
+  return pathSegments.value.slice(0, index + 1).join('/')
+}
+
+const goBack = () => {
+  if (!currentPath.value) return
+  const segments = currentPath.value.split('/').filter(Boolean)
+  segments.pop()
+  currentPath.value = segments.join('/')
+  loadFiles()
+}
+
+// 加载当前分区下的文件列表
+const loadFiles = async () => {
+  if (!activeCategory.value || !activeCategoryConfig.value) return
+  loading.value = true
+  try {
+    const list = await getFileList(driveId.value, fullPath.value).catch(async (error: any) => {
+      // 如果当前分类目录不存在，自动创建后再读取
+      if (error?.response?.status === 404) {
+        const cat = activeCategoryConfig.value
+        await createFolder(driveId.value, rootPath.value, cat.folder)
+        return await getFileList(driveId.value, fullPath.value)
+      }
+      throw error
+    })
+    fileList.value = list || []
+  } catch (error: any) {
+    console.error('加载公司文件失败:', error)
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    loading.value = false
+  }
+}
+
+const refreshFiles = () => {
+  loadFiles()
+}
+
+const handleCategoryClick = (key: string) => {
+  if (activeCategory.value === key) return
+  activeCategory.value = key
+  currentPath.value = ''
+  activeSeries.value = 'all'
+  searchKeyword.value = ''
+  loadFiles()
+}
+
+// 将后端返回的完整相对路径转换成「当前分区」内部的相对路径
+const normalizeCategoryPath = (rawPath: string): string => {
+  const cat = activeCategoryConfig.value
+  const folder = cat?.folder || activeCategory.value
+  const basePrefix = `${rootPath.value}/${folder}`
+  if (rawPath.startsWith(basePrefix)) {
+    const sub = rawPath.slice(basePrefix.length)
+    return sub.replace(/^\/+/, '')
+  }
+  return rawPath.replace(/^\/+/, '')
+}
+
+const navigateToPath = (path: string) => {
+  currentPath.value = normalizeCategoryPath(path)
+  loadFiles()
+}
+
+const handleRowDoubleClick = (row: FileItem) => {
+  if (row.isDirectory) {
+    navigateToPath(row.path)
+  }
+}
+
+const handleItemDoubleClick = (item: FileItem) => {
+  if (item.isDirectory) {
+    navigateToPath(item.path)
+  }
+}
+
+// 文件操作
+const handleCreateFolder = async () => {
+  if (!newFolderName.value.trim()) {
+    ElMessage.warning(t('files.folderNameRequired'))
+    return
+  }
+  savingFolder.value = true
+  try {
+    let folderName = newFolderName.value.trim()
+    let typeSlug = ''
+
+    if (isAtCategoryRoot.value) {
+      // 在大类根目录，由用户选择类型
+      typeSlug = selectedSeriesForFolder.value.trim()
+    } else {
+      // 在子文件夹内，自动从路径推断类型
+      typeSlug = getCurrentTypeFromPath() || ''
+    }
+
+    if (typeSlug && typeSlug !== 'all') {
+      await ensureSeriesExists(typeSlug)
+      const safeType = typeSlug.replace(/[\\/]/g, '_')
+      folderName = `[${safeType}] ${folderName}`
+    }
+
+    await createFolder(driveId.value, fullPath.value, folderName)
+    showCreateFolderDialog.value = false
+    newFolderName.value = ''
+    selectedSeriesForFolder.value = ''
+    await loadFiles()
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    savingFolder.value = false
+  }
+}
+
+const handleDelete = async (item: FileItem) => {
+  try {
+    await ElMessageBox.confirm(
+      t('files.deleteConfirm', { name: item.name }),
+      t('common.warning'),
+      { type: 'warning' }
+    )
+    await deleteFile(driveId.value, `${fullPath.value}/${item.name}`)
+    await loadFiles()
+    ElMessage.success(t('common.deleteSuccess'))
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.message || t('common.error'))
+    }
+  }
+}
+
+const handleRename = async (item: FileItem) => {
+  try {
+    const { value } = await ElMessageBox.prompt(
+      t('files.renamePrompt', { name: item.name }),
+      t('files.rename'),
+      {
+        inputValue: item.name,
+        confirmButtonText: t('common.confirm'),
+        cancelButtonText: t('common.cancel')
+      }
+    )
+    if (!value || value === item.name) return
+    await renameFile(driveId.value, `${fullPath.value}/${item.name}`, value.trim())
+    await loadFiles()
+    ElMessage.success(t('common.saveSuccess'))
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.message || t('common.error'))
+    }
+  }
+}
+
+const handleDownload = async (item: FileItem) => {
+  try {
+    const blob = await downloadFile(driveId.value, `${fullPath.value}/${item.name}`)
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = item.name
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  }
+}
+
+// 预览：在新标签中打开预览地址
+const handlePreview = (item: FileItem) => {
+  const url = getPreviewUrl(driveId.value, item.path)
+  window.open(url, '_blank')
+}
+
+// 上传
+const handleUploadChange = (file: UploadUserFile, fileListLocal: UploadUserFile[]) => {
+  uploadFileList.value = fileListLocal
+}
+
+const handleUploadRemove = (_file: UploadUserFile, fileListLocal: UploadUserFile[]) => {
+  uploadFileList.value = fileListLocal
+}
+
+const handleUploadSubmit = async () => {
+  if (!uploadFileList.value.length) {
+    ElMessage.warning(t('files.selectFileWarning'))
+    return
+  }
+  uploading.value = true
+  try {
+    let typeSlug = ''
+
+    if (isAtCategoryRoot.value) {
+      typeSlug = selectedSeriesForUpload.value.trim()
+    } else {
+      typeSlug = getCurrentTypeFromPath() || ''
+    }
+    if (typeSlug && typeSlug !== 'all') {
+      await ensureSeriesExists(typeSlug)
+    }
+
+    const safeType = typeSlug && typeSlug !== 'all'
+      ? typeSlug.replace(/[\\/]/g, '_')
+      : ''
+
+    for (const f of uploadFileList.value) {
+      if (!f.raw) continue
+      let rawFile = f.raw as File
+
+      if (safeType) {
+        const originName = rawFile.name
+        const dotIndex = originName.lastIndexOf('.')
+        const ext = dotIndex > -1 ? originName.slice(dotIndex) : ''
+        const base = dotIndex > -1 ? originName.slice(0, dotIndex) : originName
+        const newName = `[${safeType}] ${base}${ext}`
+
+        rawFile = new File([rawFile], newName, { type: rawFile.type })
+      }
+
+      await uploadFile(driveId.value, fullPath.value, rawFile)
+    }
+    uploadFileList.value = []
+    showUploadDialog.value = false
+    selectedSeriesForUpload.value = ''
+    await loadFiles()
+    ElMessage.success(t('files.uploadSuccess'))
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    uploading.value = false
+  }
+}
+
+// 工具函数：格式化
+const formatFileSize = (size?: number): string => {
+  if (!size && size !== 0) return '-'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
+  return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
+}
+
+const formatDate = (dateStr?: string): string => {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const handleMoreCommand = (command: string, item: FileItem) => {
+  if (command === 'rename') {
+    handleRename(item)
+  } else if (command === 'delete') {
+    handleDelete(item)
+  }
+}
+
+// 顶部网格使用的辅助
+const getTypeBadge = (item: FileItem): { text: string; cls: string } | null => {
+  if (item.isPdf) return { text: 'PDF', cls: 'bg-pdf' }
+  if (item.isVideo) return { text: (item.extension || '').replace('.', '').toUpperCase() || 'MP4', cls: 'bg-mp4' }
+  if (item.isImage) return { text: (item.extension || '').replace('.', '').toUpperCase() || 'IMG', cls: 'bg-img' }
+  return null
+}
+
+const getPreviewThumbnail = (item: FileItem): string | null => {
+  if (!item.isImage) return null
+  // 直接复用预览地址作为缩略图
+  return getPreviewUrl(driveId.value, item.path)
+}
+
+// 去掉前缀 [类型]，用于界面展示文件/文件夹名称
+const getDisplayName = (item: FileItem): string => {
+  if (!item.name) return ''
+  const m = item.name.match(/^\[[^\]]+\]\s*(.+)$/)
+  return m ? m[1] : item.name
+}
+
+// 从文件名或路径中提取类型标记：[类型] xxx
+const extractTypeFromItem = (item: FileItem): string | null => {
+  // 先从名称中提取
+  const nameMatch = item.name.match(/^\[(.+?)\]/)
+  if (nameMatch) return nameMatch[1]
+
+  // 再从路径中查找带 [] 的段
+  if (item.path) {
+    const segs = item.path.split('/').filter(Boolean)
+    for (const seg of segs) {
+      const m = seg.match(/^\[(.+?)\]/)
+      if (m) return m[1]
+    }
+  }
+  return null
+}
+
+// 过滤后的文件列表
+const filteredFiles = computed(() => {
+  let list = fileList.value
+
+  if (activeSeries.value !== 'all') {
+    const key = activeSeries.value
+    const normalize = (s: string) => s.replace(/[\\/]/g, '_')
+    const keyNorm = normalize(key)
+    list = list.filter((f) => {
+      const t = extractTypeFromItem(f)
+      if (!t) return false
+      return normalize(t) === keyNorm
+    })
+  }
+
+  if (searchKeyword.value.trim()) {
+    const kw = searchKeyword.value.toLowerCase()
+    list = list.filter(f => f.name.toLowerCase().includes(kw))
+  }
+
+  return list
+})
+
+const handleOpen = (item: FileItem) => {
+  if (item.isDirectory) {
+    navigateToPath(item.path)
+  } else {
+    handlePreview(item)
+  }
+}
+
+// 从当前路径中推断所属类型（例如根目录下的 [日推] 文件夹内）
+const getCurrentTypeFromPath = (): string | null => {
+  if (!currentPath.value) return null
+  const firstSeg = pathSegments.value[0]
+  if (!firstSeg) return null
+  const match = firstSeg.match(/^\[(.+?)\]/)
+  return match ? match[1] : null
+}
+
+// 确保一个类型（系列）存在：没有就创建，并同步到左侧 Tab & 后端
+const ensureSeriesExists = async (seriesInput: string) => {
+  const raw = (seriesInput || '').trim()
+  if (!raw || raw === 'all') return
+
+  // 约定：用户可以输入 “中文/English” 的形式，系统自动拆成中英双语
+  const parts = raw.split('/').map(p => p.trim()).filter(Boolean)
+  const nameZh = parts[0] || raw
+  const nameEn = parts[1] || parts[0] || raw
+  const slug = raw // 暂时直接用原始字符串作为 key，保持直观
+
+  const exists = seriesTabs.value.find(
+    (t) => t.slug === slug && t.categoryKey === activeCategory.value,
+  )
+  if (exists) {
+    activeSeries.value = exists.key
+    return
+  }
+
+  const label = raw
+  const newTab: SeriesTab = {
+    key: slug,
+    label,
+    slug,
+    categoryKey: activeCategory.value,
+  }
+  seriesTabs.value.push(newTab)
+  activeSeries.value = newTab.key
+
+  // 同步到后端（失败了也不影响前端使用）
+  try {
+    await createCompanyFileSeries({
+      categoryKey: activeCategory.value,
+      nameZh,
+      nameEn,
+      slug,
+    })
+  } catch (error) {
+    console.error('创建公司文件类型失败:', error)
+  }
+}
+
+const loadCategoriesAndSeries = async () => {
+  try {
+    const [cats, series, wsCfgs] = await Promise.all([
+      getCompanyFileCategories(),
+      getCompanyFileSeries(),
+      getWorkspaceStorageConfigs(),
+    ])
+
+    categories.value = (cats || []).filter(c => c.enabled)
+    if (!categories.value.length) {
+      // 如果后端暂时没有数据，使用默认五大类作为兜底
+      categories.value = [
+        {
+          id: 1,
+          key: 'specs',
+          nameZh: '产品规格书',
+          nameEn: 'Product Specs',
+          descZh: 'PDF 说明书 / 认证证书',
+          descEn: 'PDF manuals / certificates',
+          icon: '📘',
+          folder: 'specs',
+          sortOrder: 1,
+          enabled: true,
+        },
+        {
+          id: 2,
+          key: 'images',
+          nameZh: '产品图片',
+          nameEn: 'Product Images',
+          descZh: '高清精修图 / 现场实拍',
+          descEn: 'High‑resolution product photos',
+          icon: '🖼️',
+          folder: 'images',
+          sortOrder: 2,
+          enabled: true,
+        },
+        {
+          id: 3,
+          key: 'videos',
+          nameZh: '产品视频',
+          nameEn: 'Product Videos',
+          descZh: '宣传片 / 拆解 / 安装',
+          descEn: 'Promo / demo / installation',
+          icon: '🎬',
+          folder: 'videos',
+          sortOrder: 3,
+          enabled: true,
+        },
+        {
+          id: 4,
+          key: 'marketing',
+          nameZh: '推广素材',
+          nameEn: 'Marketing Assets',
+          descZh: '朋友圈文案 / 海报模板',
+          descEn: 'Marketing copy / poster templates',
+          icon: '🚀',
+          folder: 'marketing',
+          sortOrder: 4,
+          enabled: true,
+        },
+        {
+          id: 5,
+          key: 'brand',
+          nameZh: '品牌物料',
+          nameEn: 'Brand Assets',
+          descZh: 'Logo / VI标准 / 灯箱图',
+          descEn: 'Logo / VI / brand materials',
+          icon: '📂',
+          folder: 'brand',
+          sortOrder: 5,
+          enabled: true,
+        },
+      ]
+    }
+
+    if (!activeCategory.value && categories.value.length) {
+      activeCategory.value = categories.value[0].key
+    }
+
+    const localeIsZh = locale.value.startsWith('zh')
+    const dynamicTabs: SeriesTab[] = (series || []).map((s: CompanyFileSeries) => ({
+      key: s.slug,
+      label: localeIsZh ? s.nameZh : s.nameEn || s.nameZh,
+      slug: s.slug,
+      categoryKey: s.categoryKey,
+    }))
+
+    seriesTabs.value = [
+      { key: 'all', label: localeIsZh ? '全部类型' : 'All types', slug: 'all' },
+      ...dynamicTabs,
+    ]
+
+    // 应用后台配置的存储位置（如有）
+    const cfg = (wsCfgs as WorkspaceStorageConfig[]).find(c => c.moduleKey === 'company-files')
+    if (cfg) {
+      driveId.value = (cfg.driveId || DEFAULT_DRIVE_ID).toLowerCase()
+      rootPath.value = cfg.rootPath || DEFAULT_ROOT_PATH
+    }
+  } catch (error: any) {
+    console.error('加载公司文件配置失败:', error)
+    ElMessage.error(error?.message || t('common.error'))
+  }
+}
+
+onMounted(async () => {
+  await loadCategoriesAndSeries()
+  await loadFiles()
+})
+</script>
+
+<style scoped lang="scss">
+.company-files-page {
+  min-height: 100vh;
+  padding: 32px 32px 40px;
+  background: #f5f5f7;
+
+  .container {
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+
+  .header {
+    margin-bottom: 32px;
+
+    h1 {
+      font-size: 32px;
+      font-weight: 600;
+      margin: 0;
+      color: #1d1d1f;
+    }
+
+    p {
+      color: #86868b;
+      margin: 8px 0 0;
+      font-size: 14px;
+    }
+  }
+
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+  }
+
+  .cat-card {
+    background: #ffffff;
+    padding: 24px 20px;
+    border-radius: 22px;
+    transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+    border: 1px solid transparent;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    cursor: pointer;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+
+    .cat-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+    }
+
+    h3 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 600;
+      color: #1d1d1f;
+    }
+
+    p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: #86868b;
+    }
+
+    &.active {
+      background: linear-gradient(135deg, #0071e3 0%, #005bb7 100%);
+      color: #ffffff;
+      box-shadow: 0 15px 35px rgba(0, 113, 227, 0.3);
+      transform: scale(1.02);
+      border-color: transparent;
+
+      h3 {
+        color: #ffffff;
+      }
+
+      p {
+        color: rgba(255, 255, 255, 0.85);
+      }
+    }
+  }
+
+  .content-area {
+    background: #ffffff;
+    border-radius: 28px;
+    padding: 24px 24px 28px;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.02);
+  }
+
+  .content-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    border-bottom: 1px solid #f2f2f2;
+    padding-bottom: 16px;
+  }
+
+  .series-tabs {
+    display: flex;
+    gap: 8px;
+    background: #f2f2f7;
+    padding: 4px;
+    border-radius: 12px;
+  }
+
+  .s-tab {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    color: #86868b;
+    cursor: pointer;
+    border-radius: 9px;
+    transition: all 0.2s;
+
+    &.active {
+      background: #ffffff;
+      color: #1d1d1f;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    }
+  }
+
+  .nav-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+
+    .search-input {
+      width: 260px;
+
+      :deep(.el-input__wrapper) {
+        background: #f2f2f7;
+        box-shadow: none;
+        border-radius: 12px;
+      }
+
+      :deep(.el-input__inner) {
+        font-size: 13px;
+      }
+    }
+  }
+
+  .file-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  .file-item {
+    position: relative;
+    background: #ffffff;
+    border: 1px solid #f2f2f2;
+    border-radius: 16px;
+    padding: 18px;
+    transition: all 0.3s cubic-bezier(0.25, 1, 0.5, 1);
+    cursor: pointer;
+    text-align: center;
+
+    &:hover {
+      transform: translateY(-4px);
+      border-color: #0071e3;
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.04);
+    }
+  }
+
+  .file-preview {
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 56px;
+    margin-bottom: 14px;
+    background: #f9f9fb;
+    border-radius: 12px;
+    position: relative;
+    overflow: hidden;
+
+    img {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+    }
+  }
+
+  .type-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: white;
+    text-transform: uppercase;
+  }
+
+  .bg-pdf {
+    background: #ff3b30;
+  }
+
+  .bg-mp4 {
+    background: #5856d6;
+  }
+
+  .bg-img {
+    background: #34c759;
+  }
+
+  .file-name {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 4px;
+    line-height: 1.4;
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  .file-meta {
+    font-size: 12px;
+    color: #86868b;
+    margin-bottom: 14px;
+  }
+
+  .file-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.25s;
+  }
+
+  .file-item:hover .file-actions {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 12px;
+    border-radius: 20px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+    transition: 0.2s;
+  }
+
+  .btn-view {
+    background: #f2f2f7;
+    color: #1d1d1f;
+  }
+
+  .btn-down {
+    background: #0071e3;
+    color: #ffffff;
+  }
+
+  .btn-view:hover {
+    background: #e5e5ea;
+  }
+
+  .more-dropdown {
+    .btn-more {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      padding: 6px 0;
+      border-radius: 999px;
+      background: #f2f2f7;
+      border: none;
+      cursor: pointer;
+      color: #86868b;
+      transition: 0.2s;
+    }
+
+    .btn-more:hover {
+      background: #e5e5ea;
+      color: #1d1d1f;
+    }
+  }
+
+  .empty-state {
+    grid-column: 1/-1;
+    margin-top: 32px;
+  }
+}
+</style>
+
+

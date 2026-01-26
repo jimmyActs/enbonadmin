@@ -1,0 +1,168 @@
+/*
+  Global theme tokens (Apple / Microsoft-like modern, minimal, fluent)
+  - No functional changes: only visual + UX polish
+  - Works with Element Plus CSS variables
+*/
+
+:root {
+  /* Typography */
+  --app-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+
+  /* Brand */
+  --brand: #2d6cff; /* Fluent-like blue */
+  --brand-2: #7c3aed; /* subtle accent */
+
+  /* Surfaces */
+  --bg: #f6f7fb;
+  --bg-elevated: rgba(255, 255, 255, 0.78);
+  --bg-elevated-2: rgba(255, 255, 255, 0.92);
+  --stroke: rgba(0, 0, 0, 0.06);
+  --stroke-strong: rgba(0, 0, 0, 0.10);
+
+  /* Text */
+  --text: rgba(28, 28, 30, 0.92);
+  --text-2: rgba(28, 28, 30, 0.66);
+  --text-3: rgba(28, 28, 30, 0.46);
+
+  /* Shadows */
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+
+  /* Radius */
+  --r-sm: 10px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 22px;
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* App background */
+  --app-bg: radial-gradient(1200px 900px at 15% 10%, rgba(45, 108, 255, 0.10), rgba(45, 108, 255, 0) 55%),
+    radial-gradient(1000px 800px at 80% 20%, rgba(124, 58, 237, 0.10), rgba(124, 58, 237, 0) 55%),
+    linear-gradient(180deg, #f7f8fc 0%, #f3f5fb 50%, #f6f7fb 100%);
+
+  /* Element Plus overrides */
+  --el-color-primary: var(--brand);
+  --el-color-primary-light-3: rgba(45, 108, 255, 0.75);
+  --el-color-primary-light-5: rgba(45, 108, 255, 0.55);
+  --el-color-primary-light-7: rgba(45, 108, 255, 0.35);
+  --el-color-primary-light-9: rgba(45, 108, 255, 0.18);
+  --el-border-radius-base: var(--r-md);
+  --el-border-color: rgba(0, 0, 0, 0.08);
+  --el-border-color-light: rgba(0, 0, 0, 0.06);
+  --el-border-color-lighter: rgba(0, 0, 0, 0.05);
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: var(--text-2);
+  --el-text-color-secondary: var(--text-3);
+  --el-bg-color: rgba(255, 255, 255, 0.92);
+  --el-fill-color-blank: rgba(255, 255, 255, 0.92);
+  --el-box-shadow: none;
+  --el-box-shadow-light: none;
+  --el-box-shadow-lighter: none;
+
+  /* Glass control (backdrop-filter is expensive on Windows, keep subtle) */
+  --glass-blur: 0px;
+}
+
+html,
+body {
+  font-family: var(--app-font);
+  color: var(--text);
+  background: var(--app-bg);
+}
+
+::selection {
+  background: rgba(45, 108, 255, 0.22);
+}
+
+/* Nice, subtle scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.22) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.18);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.26);
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+/* Element Plus: cards / dialogs / tables unified */
+.el-card {
+  border-radius: var(--r-xl);
+  border: 1px solid var(--stroke);
+  background: linear-gradient(180deg, var(--bg-elevated-2), var(--bg-elevated));
+  box-shadow: none;
+  transition: transform 200ms var(--ease-out), border-color 200ms var(--ease-out);
+}
+
+.el-card:hover {
+  border-color: var(--stroke-strong);
+  transform: translateY(-2px);
+}
+
+.el-dialog {
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: none;
+  border: 1px solid var(--stroke);
+}
+
+@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
+  .el-dialog {
+    backdrop-filter: blur(var(--glass-blur));
+    -webkit-backdrop-filter: blur(var(--glass-blur));
+  }
+}
+
+.el-dialog__header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
+}
+
+.el-table {
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.el-table th.el-table__cell {
+  background: rgba(255, 255, 255, 0.60);
+}
+
+.el-input__wrapper,
+.el-textarea__inner {
+  border-radius: var(--r-md);
+  transition: box-shadow 180ms var(--ease-out), border-color 180ms var(--ease-out);
+}
+
+.el-input__wrapper.is-focus,
+.el-textarea__inner:focus {
+  box-shadow: 0 0 0 4px rgba(45, 108, 255, 0.18);
+}
+
+.el-button {
+  border-radius: 12px;
+  transition: transform 180ms var(--ease-out);
+}
+
+.el-button:active {
+  transform: translateY(1px);
+}
+
+

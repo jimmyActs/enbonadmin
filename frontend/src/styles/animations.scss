@@ -1,0 +1,261 @@
+// 苹果风格动画样式
+// 使用苹果的缓动函数和动画效果
+
+// 缓动函数
+$ease-out-cubic: cubic-bezier(0.4, 0, 0.2, 1);
+$ease-in-out-cubic: cubic-bezier(0.4, 0, 0.2, 1);
+$ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+$ease-in-out-expo: cubic-bezier(0.87, 0, 0.13, 1);
+
+// 路由切换动画
+.fade-slide-enter-active,
+.fade-slide-leave-active {
+  transition: opacity 0.24s $ease-out-expo, transform 0.24s $ease-out-expo;
+  will-change: opacity, transform;
+}
+
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
+// 内容淡入动画
+.fade-in-up {
+  animation: fadeInUp 0.5s $ease-out-expo forwards;
+  opacity: 0;
+  will-change: opacity, transform;
+  // 确保动画完成后内容可见（回退机制）
+  animation-fill-mode: both;
+}
+
+// 如果动画未执行（例如在旧浏览器中），1秒后强制显示
+@media (prefers-reduced-motion: no-preference) {
+  .fade-in-up {
+    animation: fadeInUp 0.5s $ease-out-expo forwards;
+  }
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+// 卡片淡入动画（带延迟）
+.fade-in-card {
+  animation: fadeInCard 0.6s $ease-out-expo forwards;
+  opacity: 0;
+  will-change: opacity, transform;
+  animation-fill-mode: both;
+}
+
+@keyframes fadeInCard {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+// 延迟动画（用于多个元素依次出现）
+@for $i from 1 through 20 {
+  .fade-in-delay-#{$i} {
+    animation: fadeInUp 0.5s $ease-out-expo forwards;
+    animation-delay: #{$i * 0.05}s;
+    opacity: 0;
+    will-change: opacity, transform;
+    animation-fill-mode: both;
+  }
+}
+
+// 确保动画在页面加载时触发
+.page-content-enter {
+  > * {
+    animation-fill-mode: forwards;
+  }
+}
+
+// 缩放淡入动画
+.scale-fade-in {
+  animation: scaleFadeIn 0.5s $ease-out-expo forwards;
+  opacity: 0;
+  will-change: opacity, transform;
+  animation-fill-mode: both;
+}
+
+@keyframes scaleFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+// 轻微弹跳动画（用于交互反馈）
+.bounce-subtle {
+  animation: bounceSubtle 0.5s $ease-out-expo;
+}
+
+@keyframes bounceSubtle {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.02);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+// 页面内容容器动画
+.page-content-enter {
+  animation: pageContentEnter 0.5s $ease-out-expo forwards;
+  opacity: 0;
+  will-change: opacity, transform;
+  animation-fill-mode: both;
+}
+
+@keyframes pageContentEnter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// 板块容器动画（用于工作空间等页面的各个模块）
+.section-enter {
+  animation: sectionEnter 0.6s $ease-out-expo forwards;
+}
+
+@keyframes sectionEnter {
+  from {
+    opacity: 0;
+    transform: translateY(20px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+// 列表项动画（用于表格、列表等）
+.list-item-enter {
+  animation: listItemEnter 0.4s $ease-out-expo forwards;
+}
+
+@keyframes listItemEnter {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+// 卡片悬停动画增强
+.card-hover-lift {
+  transition: all 0.3s $ease-out-cubic;
+  
+  &:hover {
+    transform: translateY(-4px) scale(1.01);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+  }
+}
+
+// 平滑过渡
+.smooth-transition {
+  transition: all 0.3s $ease-out-cubic;
+}
+
+// 淡入淡出
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s $ease-out-cubic;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+// 滑动淡入
+.slide-fade-enter-active {
+  transition: all 0.4s $ease-out-expo;
+}
+
+.slide-fade-leave-active {
+  transition: all 0.3s $ease-in-out-cubic;
+}
+
+.slide-fade-enter-from {
+  transform: translateX(20px);
+  opacity: 0;
+}
+
+.slide-fade-leave-to {
+  transform: translateX(-20px);
+  opacity: 0;
+}
+
+// 下拉展开动画
+.slide-down-enter-active,
+.slide-down-leave-active {
+  transition: all 0.3s $ease-out-cubic;
+  overflow: hidden;
+}
+
+.slide-down-enter-from {
+  max-height: 0;
+  opacity: 0;
+}
+
+.slide-down-leave-to {
+  max-height: 0;
+  opacity: 0;
+}
+
+// 加载状态动画
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.shimmer {
+  animation: shimmer 2s infinite;
+  background: linear-gradient(
+    to right,
+    #f0f0f0 0%,
+    #e0e0e0 20%,
+    #f0f0f0 40%,
+    #f0f0f0 100%
+  );
+  background-size: 1000px 100%;
+}
+
