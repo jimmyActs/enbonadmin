@@ -24,9 +24,10 @@ export function getApiBaseURL(): string {
 }
 
 // 创建axios实例
+// 说明：容量扫描等操作在大盘符上可能比较慢，这里把全局超时时间调大一点，避免频繁 timeout
 const api = axios.create({
   baseURL: getApiBaseURL(),
-  timeout: 10000,
+  timeout: 60000, // 60 秒全局超时
   headers: {
     'Content-Type': 'application/json',
   },

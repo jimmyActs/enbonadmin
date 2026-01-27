@@ -571,16 +571,22 @@ const getLocale = () => {
   return locale.value
 }
 
-// 计算剩余空间百分比
+// 计算剩余空间百分比（保证结果在 0~100 之间，避免进度条告警）
 const getRemainingPercent = (drive: DriveInfo): number => {
+  let percent = 100
+
   if (drive.usedPercent !== undefined) {
-    return 100 - drive.usedPercent
+    percent = 100 - drive.usedPercent
+  } else if (drive.capacity && drive.used !== undefined) {
+    // 如果没有 usedPercent，尝试从 used 和 capacity 计算
+    percent = ((drive.capacity - drive.used) / drive.capacity) * 100
   }
-  // 如果没有usedPercent，尝试从used和capacity计算
-  if (drive.capacity && drive.used !== undefined) {
-    return ((drive.capacity - drive.used) / drive.capacity) * 100
+
+  // 部分磁盘在扫描失败或权限异常时可能返回异常值，这里做一次安全夹紧
+  if (Number.isNaN(percent)) {
+    return 100
   }
-  return 100 // 默认返回100%
+  return Math.min(100, Math.max(0, percent))
 }
 
 // 状态管理

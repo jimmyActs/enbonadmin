@@ -188,7 +188,11 @@ router.beforeEach((to, _from, next) => {
     } else if (to.path === '/finance') {
       hasPermission = canAccessFinance(currentUserInfo)
     } else if (to.path === '/crm') {
+      // 小满CRM：目前仅对超级管理员开放
       hasPermission = canAccessCRM(currentUserInfo)
+    } else if (to.path === '/workflow') {
+      // 智能工作流：目前仅对超级管理员开放
+      hasPermission = currentUserInfo.role === 'super_admin'
     } else if (to.path === '/files') {
       hasPermission = canAccessFiles(currentUserInfo)
     } else if (to.path === '/workspace/company-files') {

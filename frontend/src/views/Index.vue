@@ -1807,30 +1807,44 @@ const todos = computed(() => {
   }))
 })
 
-// 公司通告 - 从后端API获取
+// 公司通告 - 从后端API获取（只展示类型为 "announcement" 的记录）
 const announcements = computed(() => {
   if (!announcementsData.value || !Array.isArray(announcementsData.value)) {
     return []
   }
-  return announcementsData.value.map(ann => ({
-    id: ann.id,
-    title: ann.title,
-    date: formatDateTime(ann.publishTime),
-    read: (ann as any).isRead || false, // 使用后端返回的已读状态
-    type: ann.type,
-    content: ann.content,
-    publishTime: ann.publishTime,
-    creatorId: ann.creatorId,
-    isSystem: ann.isSystem || false,
-  }))
+  return announcementsData.value
+    .filter(ann => ann.type === 'announcement')
+    .map(ann => ({
+      id: ann.id,
+      title: ann.title,
+      date: formatDateTime(ann.publishTime),
+      read: (ann as any).isRead || false, // 使用后端返回的已读状态
+      type: ann.type,
+      content: ann.content,
+      publishTime: ann.publishTime,
+      creatorId: ann.creatorId,
+      isSystem: ann.isSystem || false,
+    }))
 })
 
-// 行业新闻
-const industryNews = reactive([
-  { id: 1, title: '2024年LED显示屏市场趋势分析', date: '2024-12-15' },
-  { id: 2, title: '户外LED显示屏新技术突破', date: '2024-12-12' },
-  { id: 3, title: 'Micro LED技术迎来商业化元年', date: '2024-12-08' }
-])
+// 行业新闻 - 从公告表中过滤类型为 "industry_news" 的记录
+const industryNews = computed(() => {
+  if (!announcementsData.value || !Array.isArray(announcementsData.value)) {
+    return []
+  }
+  return announcementsData.value
+    .filter(ann => ann.type === 'industry_news')
+    .map(ann => ({
+      id: ann.id,
+      title: ann.title,
+      date: formatDateTime(ann.publishTime),
+      type: ann.type,
+      content: ann.content,
+      publishTime: ann.publishTime,
+      creatorId: ann.creatorId,
+      isSystem: ann.isSystem || false,
+    }))
+})
 
 const getClockParts = (timeZone: string) => { // 获取指定时区的时分秒
   const fmt = new Intl.DateTimeFormat('en-GB', { // 使用 24 小时制格式化器

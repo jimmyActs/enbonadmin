@@ -83,11 +83,8 @@ export function canAccessFinance(userInfo: UserInfo | null): boolean {
 export function canAccessCRM(userInfo: UserInfo | null): boolean {
   if (!userInfo) return false;
   const role = userInfo.role;
-  return (
-    role === UserRole.SUPER_ADMIN ||
-    role === UserRole.DEPARTMENT_HEAD ||
-    role === UserRole.EMPLOYEE
-  );
+  // 当前阶段：小满CRM 模块仅对超级管理员开放，其他角色一律不可见/不可访问
+  return role === UserRole.SUPER_ADMIN;
 }
 
 /**

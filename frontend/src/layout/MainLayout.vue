@@ -58,7 +58,10 @@
           <el-icon><TrendCharts /></el-icon>
           <template #title>{{ $t('layout.menu.sales') }}</template>
         </el-menu-item>
-        <el-menu-item index="/workflow">
+        <el-menu-item 
+          v-if="isSuperAdmin"
+          index="/workflow"
+        >
           <el-icon><Document /></el-icon>
           <template #title>{{ $t('layout.menu.workflow') }}</template>
         </el-menu-item>

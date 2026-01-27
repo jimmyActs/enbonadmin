@@ -3,6 +3,8 @@ import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateCol
 export enum AnnouncementType {
   ANNOUNCEMENT = 'announcement', // 公司公告
   NOTICE = 'notice', // 通知
+  INDUSTRY_NEWS = 'industry_news', // 行业新闻
+  EVENT = 'event', // 活动（预留）
 }
 
 @Entity('announcements')
@@ -17,7 +19,7 @@ export class Announcement {
     type: 'simple-enum',
     enum: AnnouncementType,
   })
-  type: AnnouncementType; // 类型：公告或通知
+  type: AnnouncementType; // 类型：公告 / 通知 / 行业新闻 / 活动
 
   @Column({ type: 'text' })
   title: string; // 标题

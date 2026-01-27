@@ -296,7 +296,7 @@
       </template>
     </el-dialog>
 
-    <!-- 已发布的公告/通知列表 -->
+    <!-- 已发布的公告 / 通知 / 行业新闻 列表 -->
     <el-card class="announcements-card" style="margin-top: 24px;">
       <template #header>
         <div class="card-header">
