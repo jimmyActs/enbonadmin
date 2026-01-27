@@ -88,14 +88,14 @@ export class User {
   phone: string;
 
   @Column({
-    type: 'text',
+    type: 'simple-enum',
     enum: UserRole,
     default: UserRole.EMPLOYEE,
   })
   role: UserRole;
 
   @Column({
-    type: 'text',
+    type: 'simple-enum',
     enum: Department,
     nullable: true,
   })
@@ -106,7 +106,7 @@ export class User {
 
   // 员工信息扩展字段
   @Column({
-    type: 'text',
+    type: 'simple-enum',
     enum: Gender,
     nullable: true,
   })
@@ -119,7 +119,7 @@ export class User {
   position: string; // 职位/岗位
 
   @Column({
-    type: 'text',
+    type: 'simple-enum',
     enum: EmploymentStatus,
     default: EmploymentStatus.ACTIVE,
   })
@@ -152,7 +152,7 @@ export class User {
   team: string; // 所属小组/战区编码，例如 sales_japan_korea
 
   @Column({
-    type: 'text',
+    type: 'simple-enum',
     enum: OrgRoleType,
     default: OrgRoleType.STAFF,
   })

@@ -13,7 +13,10 @@ export class Announcement {
   @Column()
   creatorId: number; // 创建者ID
 
-  @Column({ type: 'text', enum: AnnouncementType })
+  @Column({
+    type: 'simple-enum',
+    enum: AnnouncementType,
+  })
   type: AnnouncementType; // 类型：公告或通知
 
   @Column({ type: 'text' })

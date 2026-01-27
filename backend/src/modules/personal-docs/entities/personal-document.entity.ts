@@ -27,7 +27,7 @@ export class PersonalDocument {
   tags?: string | null;
 
   @Column({
-    type: 'text',
+    type: 'simple-enum',
     enum: PersonalDocumentCategory,
     default: PersonalDocumentCategory.DOCUMENT,
   })

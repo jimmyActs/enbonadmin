@@ -28,7 +28,7 @@ export class RolePermission {
   permissionId: number;
 
   @Column({
-    type: 'text',
+    type: 'simple-enum',
     enum: DataScope,
     default: DataScope.SELF,
   })
