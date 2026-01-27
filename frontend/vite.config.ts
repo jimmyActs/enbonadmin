@@ -8,6 +8,7 @@ export default defineConfig({
     host: '0.0.0.0', // 允许外部访问
     port: 5173,
     strictPort: false, // 如果端口被占用，自动尝试下一个可用端口
+    allowedHosts: ['polybasic-unobstruently-jamari.ngrok-free.dev'],
   },
   build: {
     rollupOptions: {
