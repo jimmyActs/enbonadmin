@@ -99,7 +99,7 @@
                     <span style="margin-left: 4px;">{{ $t('files.gridView') }}</span>
                   </el-radio-button>
                 </el-radio-group>
-                <el-button :icon="Refresh" circle @click="refreshFiles" />
+                <el-button :icon="Refresh" circle class="icon-circle-btn" @click="refreshFiles" />
                 <el-button :icon="Upload" @click="showUploadDialog = true">
                   {{ $t('files.upload') }}
                 </el-button>
@@ -308,6 +308,45 @@
                         </el-dropdown-menu>
                       </template>
                     </el-dropdown>
+                  </div>
+                  <!-- 手机端：把常用操作放在卡片下方 -->
+                  <div class="file-card-actions-mobile">
+                    <el-button
+                      v-if="item.isDirectory"
+                      size="small"
+                      @click="navigateToPath(item.path)"
+                    >
+                      {{ $t('common.open') }}
+                    </el-button>
+                    <el-button
+                      v-else
+                      size="small"
+                      @click="handleDownload(item)"
+                    >
+                      {{ $t('files.download') }}
+                    </el-button>
+                    <el-button
+                      v-if="!item.isDirectory && item.canPreview"
+                      size="small"
+                      @click="handlePreview(item)"
+                    >
+                      {{ $t('files.preview') }}
+                    </el-button>
+                    <el-button
+                      v-if="!item.isLocked || item.isOwner"
+                      size="small"
+                      @click="handleRename(item)"
+                    >
+                      {{ $t('files.rename') }}
+                    </el-button>
+                    <el-button
+                      v-if="!item.isLocked || item.isOwner"
+                      size="small"
+                      type="danger"
+                      @click="handleDelete(item)"
+                    >
+                      {{ $t('files.delete') }}
+                    </el-button>
                   </div>
                 </div>
               </div>
@@ -1468,6 +1507,12 @@ watch(showShareDialog, (val) => {
     flex-wrap: wrap;
   }
 
+  .icon-circle-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+  }
+
   .preview-container {
     display: flex;
     align-items: center;
@@ -1562,6 +1607,28 @@ watch(showShareDialog, (val) => {
       justify-content: flex-start;
       align-items: flex-start;
       flex-direction: column;
+    }
+
+    // 手机端：卡片视图下方展示操作按钮
+    .file-grid-view {
+      .file-card {
+        .file-card-actions {
+          display: none;
+        }
+
+        .file-card-actions-mobile {
+          display: flex;
+          justify-content: flex-end;
+          gap: 4px;
+          padding: 0 8px 8px;
+          flex-wrap: wrap;
+
+          .el-button {
+            padding: 4px 8px;
+            font-size: 12px;
+          }
+        }
+      }
     }
   }
 
