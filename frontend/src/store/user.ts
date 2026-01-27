@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { login } from '../api/auth';
 import type { LoginRequest, LoginResponse } from '../api/auth';
-import { getUserPermissions } from '../api/permissions';
+import { getMyPermissions } from '../api/permissions';
 
 interface UserInfo {
   id: number;
@@ -65,7 +65,7 @@ export const useUserStore = defineStore('user', {
     async loadPermissions() {
       if (!this.userInfo) return;
       try {
-        const res = await getUserPermissions(this.userInfo.id);
+        const res = await getMyPermissions();
         this.permissions = res.permissions || [];
       } catch (e) {
         console.warn('加载权限失败，已忽略，仅影响前端按钮显示:', e);

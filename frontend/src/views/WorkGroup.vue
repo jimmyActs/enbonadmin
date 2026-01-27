@@ -1795,6 +1795,21 @@ onBeforeUnmount(() => {
 
     .departments-grid {
       grid-template-columns: 1fr;
+
+      .department-card {
+        .employees-list {
+          .employee-item {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 8px;
+
+            .employee-actions {
+              width: 100%;
+              justify-content: flex-end;
+            }
+          }
+        }
+      }
     }
   }
 }

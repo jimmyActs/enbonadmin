@@ -1553,6 +1553,12 @@ watch(showShareDialog, (val) => {
     .files-layout .drives-sidebar .departments-grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
+
+    .operations-cell {
+      justify-content: flex-start;
+      align-items: flex-start;
+      flex-direction: column;
+    }
   }
 
   @media (max-width: 480px) {

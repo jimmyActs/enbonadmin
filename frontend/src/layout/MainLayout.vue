@@ -208,6 +208,11 @@ const handleCommand = (command: string) => {
 
 // 预加载常用页面 chunk（避免首次切换“等加载”的卡顿感）
 onMounted(() => {
+  // 小屏设备默认折叠侧边栏，避免手机端内容被压缩太窄
+  if (window.innerWidth <= 768) {
+    isCollapse.value = true
+  }
+
   const preload = () => {
     void import('../views/Index.vue')
     void import('../views/Workspace.vue')

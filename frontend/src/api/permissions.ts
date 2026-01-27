@@ -16,9 +16,14 @@ export interface PermissionItem {
   module: string;
 }
 
-// 获取某个用户拥有的权限编码列表
+// 获取某个用户拥有的权限编码列表（仅限后台管理使用）
 export const getUserPermissions = (userId: number): Promise<{ permissions: string[] }> => {
   return api.get(`/permissions/user/${userId}`);
+};
+
+// 获取当前登录用户自己的权限编码列表（前端按钮显示用）
+export const getMyPermissions = (): Promise<{ permissions: string[] }> => {
+  return api.get('/permissions/me');
 };
 
 // 获取全部权限点
