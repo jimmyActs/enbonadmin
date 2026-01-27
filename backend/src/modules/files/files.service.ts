@@ -73,10 +73,13 @@ export class FilesService {
         quotaInfo = await this.driveQuotaService.getQuotaInfo(rootPath);
       } else {
         // 未开启容量扫描：使用占位值，避免开发环境因扫描整盘而卡顿
+        // 这里使用 DriveQuotaService 的统一配额上限，保证与上传限制一致，
+        // 不再写死为 500MB，避免误导为“只有 500MB 可用”。
+        const quotaLimit = this.driveQuotaService.getQuotaLimit();
         quotaInfo = {
           used: 0,
-          quota: 500 * 1024 * 1024, // 500MB 占位值
-          available: 500 * 1024 * 1024,
+          quota: quotaLimit,
+          available: quotaLimit,
           usedPercent: 0,
         };
       }

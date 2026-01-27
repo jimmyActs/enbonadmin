@@ -8,8 +8,45 @@ import * as path from 'path';
  */
 @Injectable()
 export class DriveQuotaService {
-  // 每个分区的空间限制（字节），500MB = 500 * 1024 * 1024
-  private readonly QUOTA_SIZE = 500 * 1024 * 1024; // 500MB
+  /**
+   * 每个分区的空间限制（字节）
+   *
+   * 说明：
+   * - 之前写死为 500MB，导致实际共享盘只有 500MB 可用，严重不符合生产环境需求；
+   * - 现在改为可通过环境变量 DRIVE_QUOTA_GB 配置（单位：GB），默认给一个足够大的值，
+   *   相当于「几乎不限制」，只用于容量展示和防止异常写入。
+   *
+   * 例如：
+   *   DRIVE_QUOTA_GB=10240  表示 10TB 配额
+   */
+  private readonly QUOTA_SIZE: number;
+
+  constructor() {
+    const env = process.env.DRIVE_QUOTA_GB;
+    let quotaBytes: number;
+
+    if (env) {
+      const gb = parseInt(env, 10);
+      if (!isNaN(gb) && gb > 0) {
+        quotaBytes = gb * 1024 * 1024 * 1024;
+      } else {
+        // 环境变量配置错误时，退回到一个较大的默认值（10TB）
+        quotaBytes = 10 * 1024 * 1024 * 1024 * 1024;
+      }
+    } else {
+      // 默认 10TB 配额，相当于逻辑上不限制
+      quotaBytes = 10 * 1024 * 1024 * 1024 * 1024;
+    }
+
+    this.QUOTA_SIZE = quotaBytes;
+  }
+
+  /**
+   * 对外暴露当前配额上限，供其他服务在展示时复用
+   */
+  getQuotaLimit(): number {
+    return this.QUOTA_SIZE;
+  }
 
   /**
    * 获取文件夹大小
