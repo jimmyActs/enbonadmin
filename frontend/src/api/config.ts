@@ -10,17 +10,16 @@ export function getApiBaseURL(): string {
     return envUrl;
   }
   
-  // 自动检测：如果当前访问的不是localhost，则使用当前host
+  // 自动检测：根据当前访问的 host 判断
   const currentHost = window.location.hostname;
   
-  // 如果是localhost或127.0.0.1，使用默认后端地址
+  // 开发机本地访问：使用后端 3002 端口
   if (currentHost === 'localhost' || currentHost === '127.0.0.1') {
     return 'http://localhost:3002/api';
   }
   
-  // 否则使用当前host，后端端口3002
-  // 如需其它端口/域名，请通过 VITE_API_BASE_URL 覆盖
-  return `http://${currentHost}:3002/api`;
+  // 其它情况（例如通过 ngrok 访问）：统一走同源 /api，交给 Vite 或网关做反向代理
+  return '/api';
 }
 
 // 创建axios实例

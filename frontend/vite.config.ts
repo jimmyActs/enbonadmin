@@ -9,6 +9,14 @@ export default defineConfig({
     port: 5173,
     strictPort: false, // 如果端口被占用，自动尝试下一个可用端口
     allowedHosts: ['polybasic-unobstruently-jamari.ngrok-free.dev'],
+    // 本地开发 & ngrok 访问时，将 /api 的请求代理到后端 http://localhost:3002
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        secure: false,
+      },
+    },
   },
   build: {
     rollupOptions: {
