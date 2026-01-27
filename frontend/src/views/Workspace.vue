@@ -223,7 +223,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { getMyApplications } from '../api/material-applications'
 import type { MaterialApplication } from '../api/material-applications'
 import { 
@@ -260,6 +260,7 @@ import ToolboxDialog from '../components/workspace/ToolboxDialog.vue'
 
 const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 
 // 模块配置
@@ -308,6 +309,11 @@ onMounted(() => {
     activeModule.value = availableModules.value[0].key
   }
   loadApplications()
+
+  // 如果从首页带参数打开工具区，则自动弹出工具对话框
+  if (route.query.open === 'tools') {
+    showToolboxDialog.value = true
+  }
 })
 
 // 处理模块切换

@@ -98,6 +98,11 @@ export const getEmployees = (): Promise<Employee[]> => {
   return api.get('/employees');
 };
 
+// 获取用于选择（会议参会人、多选下拉）的基础员工列表
+export const getEmployeeOptions = (): Promise<Pick<Employee, 'id' | 'nickname' | 'department' | 'avatar' | 'employmentStatus' | 'workStatus'>[]> => {
+  return api.get('/employees/options/basic');
+};
+
 // 获取员工统计信息
 export const getEmployeeStatistics = (): Promise<EmployeeStatistics> => {
   return api.get('/employees/statistics');

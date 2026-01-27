@@ -65,6 +65,7 @@
               clearable
             />
             <el-button
+              v-if="canManageWorkspace"
               type="primary"
               size="small"
               :icon="Upload"
@@ -73,6 +74,7 @@
               {{ t('common.upload') }}
             </el-button>
             <el-button
+              v-if="canManageWorkspace"
               size="small"
               :icon="FolderAdd"
               @click="showCreateFolderDialog = true"
@@ -126,6 +128,7 @@
                 </button>
               </template>
               <el-dropdown
+                v-if="canManageWorkspace"
                 class="more-dropdown"
                 trigger="click"
                 @command="(command: 'rename' | 'delete') => handleMoreCommand(command, item)"
@@ -268,8 +271,17 @@ import {
   type FileItem,
 } from '../api/files'
 import { getWorkspaceStorageConfigs, type WorkspaceStorageConfig } from '../api/workspace-storage'
+import { useUserStore } from '../store/user'
 
 const { t, locale } = useI18n()
+const userStore = useUserStore()
+
+// 是否具备“工作空间内容管理”权限：控制上传/新建/重命名/删除按钮
+const canManageWorkspace = computed(() => {
+  const role = userStore.userInfo?.role
+  if (role === 'super_admin') return true
+  return userStore.hasPermission?.('workspace.companyFiles.manage') ?? false
+})
 
 const DEFAULT_DRIVE_ID = ((import.meta as any).env?.VITE_WORKSPACE_DRIVE_ID as string | undefined)?.toLowerCase?.() || 'd'
 const DEFAULT_ROOT_PATH = 'software-downloads'
@@ -410,19 +422,15 @@ const normalizeCategoryPath = (rawPath: string): string => {
   return rawPath.replace(/^\/+/, '')
 }
 
-// 加载文件列表（不存在时自动创建根目录）
+// 加载文件列表（分类目录不存在时直接当作“暂无数据”，不再自动创建，以避免普通员工触发 403）
 const loadFiles = async () => {
   if (!activeCategory.value) return
   loading.value = true
   try {
-    const list = await getFileList(driveId.value, fullPath.value).catch(async (error: any) => {
-      // 如果当前分类目录不存在，自动创建后再读取
+    const list = await getFileList(driveId.value, fullPath.value).catch((error: any) => {
       if (error?.response?.status === 404) {
-        const cat = activeCategoryConfig.value
-        if (cat?.folder) {
-          await createFolder(driveId.value, rootPath.value, cat.folder)
-          return await getFileList(driveId.value, fullPath.value)
-        }
+        // 目录不存在：视为当前分类下暂时没有任何文件/文件夹，返回空数组即可
+        return []
       }
       throw error
     })

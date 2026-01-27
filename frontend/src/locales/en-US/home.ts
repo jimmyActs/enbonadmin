@@ -40,6 +40,9 @@ export default {
   // Company announcements and news
   companyAnnouncements: 'Company Announcements',
   industryNews: 'Industry News',
+
+  // Workspace quick shortcuts
+  workspaceShortcutsTitle: 'Workspace Quick Access',
   
   // Welcome greetings
   greetings: {

@@ -50,10 +50,10 @@
               >
                 <div class="popover-employee-item">
                   <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                    {{ emp.nickname.charAt(0) }}
+                    {{ getEmployeeDisplayName(emp).charAt(0) }}
                   </el-avatar>
                   <div class="popover-employee-info">
-                    <div class="popover-employee-name">{{ emp.nickname }}</div>
+                    <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
                     <div class="popover-employee-location">
                       <el-icon class="location-icon"><Location /></el-icon>
                       <span class="location-text">{{ getDisplayLocation(emp, true) }}</span>
@@ -81,7 +81,7 @@
                 <div class="statistic-label">{{ $t('workgroup.statistics.overseas') }}</div>
                 <div class="statistic-value">{{ getOverseasEmployees().length }}</div>
                 <div class="statistic-detail" v-if="getOverseasEmployees().length > 0">
-                  {{ getOverseasEmployees().map(emp => emp.nickname).join('、') }}
+                  {{ getOverseasEmployees().map(emp => getEmployeeDisplayName(emp)).join('、') }}
                 </div>
               </div>
             </div>
@@ -98,10 +98,10 @@
               >
                 <div class="popover-employee-item">
                   <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                    {{ emp.nickname.charAt(0) }}
+                    {{ getEmployeeDisplayName(emp).charAt(0) }}
                   </el-avatar>
                   <div class="popover-employee-info">
-                    <div class="popover-employee-name">{{ emp.nickname }}</div>
+                    <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
                     <div class="popover-employee-location">
                       <el-icon class="location-icon"><Location /></el-icon>
                       <span class="location-text">{{ getDisplayLocation(emp, false) }}</span>
@@ -141,10 +141,10 @@
               class="popover-employee-item"
             >
               <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                {{ emp.nickname.charAt(0) }}
+                {{ getEmployeeDisplayName(emp).charAt(0) }}
               </el-avatar>
               <div class="popover-employee-info">
-                <div class="popover-employee-name">{{ emp.nickname }}</div>
+                <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
                 <div class="popover-employee-department">{{ getDepartmentName(emp.department || '') }}</div>
               </div>
             </div>
@@ -179,10 +179,10 @@
               class="popover-employee-item"
             >
               <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                {{ emp.nickname.charAt(0) }}
+                {{ getEmployeeDisplayName(emp).charAt(0) }}
               </el-avatar>
               <div class="popover-employee-info">
-                <div class="popover-employee-name">{{ emp.nickname }}</div>
+                <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
                 <div class="popover-employee-department">{{ getDepartmentName(emp.department || '') }}</div>
               </div>
             </div>
@@ -217,10 +217,10 @@
               class="popover-employee-item"
             >
               <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                {{ emp.nickname.charAt(0) }}
+                {{ getEmployeeDisplayName(emp).charAt(0) }}
               </el-avatar>
               <div class="popover-employee-info">
-                <div class="popover-employee-name">{{ emp.nickname }}</div>
+                <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
                 <div class="popover-employee-department">{{ getDepartmentName(emp.department || '') }}</div>
               </div>
             </div>
@@ -300,11 +300,11 @@
               class="employee-avatar"
               :class="{ 'offline': !isEmployeeOnline(employee) }"
             >
-              {{ employee.nickname.charAt(0) }}
+              {{ getEmployeeDisplayName(employee).charAt(0) }}
             </el-avatar>
             <div class="employee-info" :class="{ 'offline': !isEmployeeOnline(employee) }">
               <div class="employee-name-row">
-                <span class="employee-name">{{ employee.nickname }}</span>
+                <span class="employee-name">{{ getEmployeeDisplayName(employee) }}</span>
               </div>
               <div class="employee-details">
                 <span class="employee-position">{{ getPositionName(employee.position) }}</span>
@@ -320,11 +320,12 @@
                 class="status-tag"
               >
                 <el-icon class="work-status-icon-small">
-                  <Location v-if="getEffectiveWorkStatus(employee).startsWith('away')" />
-                  <Clock v-else-if="getEffectiveWorkStatus(employee) === 'leave'" />
-                  <VideoCamera v-else-if="getEffectiveWorkStatus(employee) === 'meeting'" />
-                  <CircleCheck v-else-if="getEffectiveWorkStatus(employee) === 'busy'" />
-                  <CircleClose v-else-if="getEffectiveWorkStatus(employee) === 'offline' || !isEmployeeOnline(employee)" />
+                  <Promotion v-if="getBaseWorkStatus(getEffectiveWorkStatus(employee)) === 'away'" />
+                  <Location v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(employee)) === 'overseas'" />
+                  <Clock v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(employee)) === 'leave'" />
+                  <VideoCamera v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(employee)) === 'meeting'" />
+                  <CircleCheck v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(employee)) === 'busy' || getBaseWorkStatus(getEffectiveWorkStatus(employee)) === 'available'" />
+                  <CircleClose v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(employee)) === 'offline' || !isEmployeeOnline(employee)" />
                 </el-icon>
                 {{ getWorkStatusText(getEffectiveWorkStatus(employee)) }}
               </el-tag>
@@ -366,20 +367,20 @@
         <div class="card-top-section">
           <div class="card-avatar-wrapper">
             <el-avatar :size="120" :src="getAvatarUrl(selectedCardEmployee)" class="card-avatar">
-              {{ selectedCardEmployee.nickname.charAt(0) }}
+              {{ getEmployeeDisplayName(selectedCardEmployee).charAt(0) }}
             </el-avatar>
             <div class="card-status-badge">
               <el-tag 
-                :type="getWorkStatusType(selectedCardEmployee.workStatus || 'available')" 
+                :type="getWorkStatusType(getEffectiveWorkStatus(selectedCardEmployee))" 
                 size="small"
                 class="status-badge-tag"
               >
                 <el-icon class="status-badge-icon" v-if="isEmployeeOnline(selectedCardEmployee) && getEffectiveWorkStatus(selectedCardEmployee) !== 'offline'">
-                  <Location v-if="getEffectiveWorkStatus(selectedCardEmployee).startsWith('away')" />
-                  <Clock v-else-if="getEffectiveWorkStatus(selectedCardEmployee) === 'leave'" />
-                  <VideoCamera v-else-if="getEffectiveWorkStatus(selectedCardEmployee) === 'meeting'" />
-                  <CircleCheck v-else-if="getEffectiveWorkStatus(selectedCardEmployee) === 'busy'" />
-                  <CircleCheck v-else-if="getEffectiveWorkStatus(selectedCardEmployee) === 'available'" />
+                  <Promotion v-if="getBaseWorkStatus(getEffectiveWorkStatus(selectedCardEmployee)) === 'away'" />
+                  <Location v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(selectedCardEmployee)) === 'overseas'" />
+                  <Clock v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(selectedCardEmployee)) === 'leave'" />
+                  <VideoCamera v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(selectedCardEmployee)) === 'meeting'" />
+                  <CircleCheck v-else-if="getBaseWorkStatus(getEffectiveWorkStatus(selectedCardEmployee)) === 'busy' || getBaseWorkStatus(getEffectiveWorkStatus(selectedCardEmployee)) === 'available'" />
                 </el-icon>
                 {{ isEmployeeOnline(selectedCardEmployee) ? getWorkStatusText(getEffectiveWorkStatus(selectedCardEmployee)) : $t('workgroup.businessCard.offline') }}
               </el-tag>
@@ -387,7 +388,7 @@
           </div>
           
           <div class="card-name-section">
-            <h2 class="card-name">{{ selectedCardEmployee.nickname }}</h2>
+            <h2 class="card-name">{{ getEmployeeDisplayName(selectedCardEmployee) }}</h2>
             <div class="card-names-row" v-if="selectedCardEmployee.chineseName || selectedCardEmployee.englishName">
               <span v-if="selectedCardEmployee.chineseName" class="card-chinese-name">
                 {{ selectedCardEmployee.chineseName }}
@@ -397,10 +398,14 @@
                 {{ selectedCardEmployee.englishName }}
               </span>
             </div>
-          <div class="card-role-info" v-if="selectedCardEmployee.position || selectedCardEmployee.department">
+            <div class="card-role-info" v-if="selectedCardEmployee.position || selectedCardEmployee.department">
               <span v-if="selectedCardEmployee.position" class="card-position">{{ getPositionName(selectedCardEmployee.position) }}</span>
               <span v-if="selectedCardEmployee.position && selectedCardEmployee.department" class="role-separator">·</span>
               <span v-if="selectedCardEmployee.department" class="card-department">{{ getDepartmentName(selectedCardEmployee.department || '') }}</span>
+            </div>
+            <!-- 个性签名：放在职位/部门下面，浅色文字 -->
+            <div class="card-signature" v-if="selectedCardEmployee.mood">
+              {{ selectedCardEmployee.mood }}
             </div>
             
             <div class="card-location-info" v-if="selectedCardEmployee.country || selectedCardEmployee.city">
@@ -435,16 +440,7 @@
               <div class="info-card-value">{{ getPositionName(selectedCardEmployee.position) }}</div>
             </div>
           </div>
-          
-          <div class="card-info-card" v-if="selectedCardEmployee.mood">
-            <div class="info-card-icon-wrapper">
-              <el-icon class="info-card-icon"><ChatDotRound /></el-icon>
-            </div>
-            <div class="info-card-content">
-              <div class="info-card-label">{{ $t('workgroup.businessCard.mood') }}</div>
-              <div class="info-card-value mood-text">{{ selectedCardEmployee.mood }}</div>
-            </div>
-          </div>
+          <!-- 原来的“心情/签名”信息卡去掉，改为在顶部姓名区域展示 -->
         </div>
       </div>
     </el-dialog>
@@ -464,7 +460,7 @@
         label-width="100px"
       >
         <el-form-item :label="$t('workgroup.targetUser')">
-          <el-input :value="selectedEmployee?.nickname" disabled />
+          <el-input :value="selectedEmployee ? getEmployeeDisplayName(selectedEmployee) : ''" disabled />
         </el-form-item>
         <el-form-item :label="$t('workgroup.reminderContent')" prop="content">
           <el-input
@@ -513,10 +509,11 @@ import { getEmployeesGrouped, getEmployeeStatistics, type Employee } from '../ap
 import { createReminder, type CreateReminderDto } from '../api/reminders'
 import { getAvatarUrl as getEmployeeAvatarUrl } from '../api/users'
 import { useUserStore } from '../store/user'
+import { useEmployeeDisplayName } from '../utils/employee'
 
 const { t, locale } = useI18n()
-
 const userStore = useUserStore()
+const { getEmployeeDisplayName } = useEmployeeDisplayName()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -687,7 +684,16 @@ const filteredDepartments = computed(() => {
     return item.employees.some(emp => {
       const nick = (emp.nickname || '').toLowerCase()
       const user = (emp.username || '').toLowerCase()
-      return nick.includes(keyword) || user.includes(keyword)
+      const cn = (emp.chineseName || '').toLowerCase()
+      const en = (emp.englishName || '').toLowerCase()
+      const display = getEmployeeDisplayName(emp).toLowerCase()
+      return (
+        nick.includes(keyword) ||
+        user.includes(keyword) ||
+        cn.includes(keyword) ||
+        en.includes(keyword) ||
+        display.includes(keyword)
+      )
     })
   }
 
@@ -717,6 +723,13 @@ const getWorkStatusType = (status: string): string => {
   offline: 'danger', // 离线 - 红色
   }
   return statusMap[baseStatus] || 'info'
+}
+
+// 获取基础工作状态（去掉目的地信息），如 'away:japan' -> 'away'
+const getBaseWorkStatus = (status: string): string => {
+  if (!status) return 'available'
+  const base = status.includes(':') ? status.split(':')[0] : status
+  return base || 'available'
 }
 
 // 获取工作状态文本（支持出差/驻外目的地）
@@ -832,7 +845,7 @@ const getEmployeesByWorkStatus = (status: string): Employee[] => {
   return employees
 }
 
-// 统计“驻外”同事：工作状态为 overseas，配合国家/城市信息展示
+// 统计“驻外”同事：工作状态为 overseas / overseas:countryCode，配合国家/城市信息展示
 const getOverseasEmployees = (): Employee[] => {
   const overseas: Employee[] = []
 
@@ -843,7 +856,8 @@ const getOverseasEmployees = (): Employee[] => {
         return
       }
       const status = getEffectiveWorkStatus(emp)
-      if (status === 'overseas') {
+      const baseStatus = status.includes(':') ? status.split(':')[0] : status
+      if (baseStatus === 'overseas') {
         overseas.push(emp)
       }
     })
@@ -1548,6 +1562,14 @@ onBeforeUnmount(() => {
             color: #86868b;
             font-weight: 500;
           }
+        }
+
+        .card-signature {
+          margin-top: 8px;
+          font-size: 13px;
+          color: #a8a8aa;
+          font-style: italic;
+          line-height: 1.5;
         }
         
         .card-location-info {

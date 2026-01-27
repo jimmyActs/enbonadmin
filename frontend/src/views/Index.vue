@@ -239,6 +239,34 @@
             </transition>
           </div>
         </div>
+
+        <!-- 工作空间快捷入口 -->
+        <div class="workspace-shortcuts fade-in-delay-3">
+          <div class="workspace-shortcuts-header">
+            <div class="card-header">
+              <el-icon><FolderOpened /></el-icon>
+              <span>{{ $t('index.workspaceShortcutsTitle') }}</span>
+            </div>
+          </div>
+          <div class="workspace-shortcuts-grid">
+            <div
+              v-for="item in workspaceShortcuts"
+              :key="item.key"
+              class="workspace-shortcut-card"
+              @click="handleWorkspaceShortcutClick(item.key)"
+            >
+              <div class="shortcut-icon" :class="item.key">
+                <el-icon :size="26">
+                  <component :is="item.icon" />
+                </el-icon>
+              </div>
+              <div class="shortcut-content">
+                <div class="shortcut-title">{{ item.title }}</div>
+                <div class="shortcut-desc">{{ item.desc }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -765,6 +793,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRouter } from 'vue-router'
 import { getLocale } from '../i18n'
 import {
   ChatDotRound,
@@ -795,7 +824,11 @@ import {
   Promotion,
   Sunny,
   SwitchButton,
-  Location as LocationIcon
+  Location as LocationIcon,
+  FolderOpened,
+  Collection,
+  Download,
+  Tools
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '../store/user'
@@ -814,6 +847,7 @@ import {
 import api from '../api/config'
 
 const { t, locale } = useI18n()
+const router = useRouter()
 const userStore = useUserStore()
 
 // 获取用户名
@@ -939,6 +973,54 @@ const quickLinks = computed(() => {
     }
   ]
 })
+
+// 工作空间快捷入口卡片
+const workspaceShortcuts = computed(() => [
+  {
+    key: 'companyFiles',
+    title: t('workspace.quickCards.companyFiles'),
+    desc: t('workspace.quickCards.companyFilesDesc'),
+    icon: FolderOpened,
+  },
+  {
+    key: 'companyCulture',
+    title: t('workspace.quickCards.companyCulture'),
+    desc: t('workspace.quickCards.companyCultureDesc'),
+    icon: Collection,
+  },
+  {
+    key: 'softwareDownloads',
+    title: t('workspace.quickCards.softwareDownloads'),
+    desc: t('workspace.quickCards.softwareDownloadsDesc'),
+    icon: Download,
+  },
+  {
+    key: 'tools',
+    title: t('workspace.quickCards.tools'),
+    desc: t('workspace.quickCards.toolsDesc'),
+    icon: Tools,
+  },
+])
+
+// 处理首页工作空间快捷入口点击
+const handleWorkspaceShortcutClick = (key: string) => {
+  if (key === 'companyFiles') {
+    router.push({ name: 'CompanyFiles' })
+    return
+  }
+  if (key === 'companyCulture') {
+    router.push({ name: 'CompanyCulture' })
+    return
+  }
+  if (key === 'softwareDownloads') {
+    router.push({ name: 'SoftwareDownloads' })
+    return
+  }
+  if (key === 'tools') {
+    // 跳转到工作空间并请求打开工具区
+    router.push({ name: 'Workspace', query: { open: 'tools' } })
+  }
+}
 
 
 // 横幅内容相关状态（整合了文本和背景图片）
@@ -2880,6 +2962,95 @@ onBeforeUnmount(() => {
                 margin: 0;
                 font-size: 14px;
               }
+            }
+          }
+        }
+      }
+
+      .workspace-shortcuts {
+        margin-top: 28px;
+
+        .workspace-shortcuts-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 12px;
+
+          .card-header span {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+          }
+        }
+
+        .workspace-shortcuts-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 16px;
+        }
+
+        .workspace-shortcut-card {
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          padding: 18px 20px;
+          background: #f9fafb;
+          border-radius: 16px;
+          border: 1px solid #e5e7eb;
+          cursor: pointer;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+          &:hover {
+            background: #ffffff;
+            box-shadow: 0 6px 18px rgba(0, 0, 0, 0.06);
+            transform: translateY(-2px);
+            border-color: #d1d5db;
+          }
+
+          .shortcut-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+
+            &.companyFiles {
+              background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+            }
+
+            &.companyCulture {
+              background: linear-gradient(135deg, #ec4899 0%, #f97316 100%);
+            }
+
+            &.softwareDownloads {
+              background: linear-gradient(135deg, #059669 0%, #14b8a6 100%);
+            }
+
+            &.tools {
+              background: linear-gradient(135deg, #6366f1 0%, #7c3aed 100%);
+            }
+          }
+
+          .shortcut-content {
+            flex: 1;
+            min-width: 0;
+
+            .shortcut-title {
+              font-size: 15px;
+              font-weight: 600;
+              color: #111827;
+              margin-bottom: 4px;
+            }
+
+            .shortcut-desc {
+              font-size: 13px;
+              color: #6b7280;
+              letter-spacing: -0.01em;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
             }
           }
         }

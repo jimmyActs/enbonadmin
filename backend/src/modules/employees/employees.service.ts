@@ -64,6 +64,35 @@ export class EmployeesService {
   }
 
   /**
+   * 获取用于前端选择（如会议参会人员、多选下拉）的基础员工列表
+   * 只返回必要字段，且对所有登录用户开放，避免暴露敏感信息
+   */
+  async findAllBasicForOptions(): Promise<
+    Array<Pick<User, 'id' | 'nickname' | 'department' | 'avatar' | 'employmentStatus' | 'workStatus'>>
+  > {
+    const users = await this.userRepository.find({
+      order: {
+        createdAt: 'DESC',
+      },
+      select: [
+        'id',
+        'nickname',
+        'department',
+        'avatar',
+        'employmentStatus',
+        'workStatus',
+        'username',
+      ],
+    });
+
+    // 过滤掉系统管理员账号
+    return users.filter(user => user.username !== 'admin').map(user => {
+      const { id, nickname, department, avatar, employmentStatus, workStatus } = user;
+      return { id, nickname, department, avatar, employmentStatus, workStatus };
+    });
+  }
+
+  /**
    * 根据部门获取员工列表
    * 注意：排除密码字段以确保安全
    */
@@ -158,19 +187,25 @@ export class EmployeesService {
         return;
       }
 
-      const status = emp.workStatus || 'available';
-      
-      // 解析出差状态和目的地（格式：away 或 away:目的地）
-      if (status.startsWith('away')) {
-        workStatusCount['away'] = (workStatusCount['away'] || 0) + 1;
-        // 提取目的地
-        const parts = status.split(':');
+      const rawStatus = emp.workStatus || 'available';
+
+      // 解析基础状态和目的地：
+      // - 出差：away 或 away:目的地
+      // - 驻外：overseas 或 overseas:国家编码
+      let baseStatus = rawStatus;
+
+      if (rawStatus.startsWith('away')) {
+        baseStatus = 'away';
+        // 提取出差目的地，用于统计目的地列表
+        const parts = rawStatus.split(':');
         if (parts.length > 1 && parts[1].trim()) {
           awayDestinations.push(parts[1].trim());
         }
-      } else {
-        workStatusCount[status] = (workStatusCount[status] || 0) + 1;
+      } else if (rawStatus.startsWith('overseas')) {
+        baseStatus = 'overseas';
       }
+
+      workStatusCount[baseStatus] = (workStatusCount[baseStatus] || 0) + 1;
     });
 
     // 去重目的地并排序
@@ -206,6 +241,7 @@ export class EmployeesService {
       workStatus: {
         away: workStatusCount['away'] || 0, // 出差人数
         awayDestinations: uniqueDestinations, // 出差目的地列表
+        overseas: workStatusCount['overseas'] || 0, // 驻外人数
         leave: workStatusCount['leave'] || 0, // 请假人数
         busy: workStatusCount['busy'] || 0, // 忙碌人数
         meeting: workStatusCount['meeting'] || 0, // 会议中人数

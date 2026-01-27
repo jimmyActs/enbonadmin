@@ -65,6 +65,7 @@
               clearable
             />
             <el-button
+              v-if="canManageWorkspace"
               type="primary"
               size="small"
               :icon="Upload"
@@ -73,6 +74,7 @@
               上传文件
             </el-button>
             <el-button
+              v-if="canManageWorkspace"
               size="small"
               :icon="FolderAdd"
               @click="showCreateFolderDialog = true"
@@ -138,6 +140,7 @@
                   打开文件夹
                 </button>
                 <el-dropdown
+                  v-if="canManageWorkspace"
                   class="more-dropdown"
                   trigger="click"
                   @command="command => handleMoreCommand(command, item)"
@@ -161,6 +164,7 @@
                   下载
                 </button>
                 <el-dropdown
+                  v-if="canManageWorkspace"
                   class="more-dropdown"
                   trigger="click"
                   @command="command => handleMoreCommand(command, item)"
@@ -317,8 +321,17 @@ import {
   type CompanyFileCategory,
   type CompanyFileSeries,
 } from '../api/company-files'
+import { useUserStore } from '../store/user'
 
 const { t, locale } = useI18n()
+const userStore = useUserStore()
+
+// 是否具备“工作空间内容管理”权限：控制公司文件的上传/新建/重命名/删除等操作按钮
+const canManageWorkspace = computed(() => {
+  const role = userStore.userInfo?.role
+  if (role === 'super_admin') return true
+  return userStore.hasPermission?.('workspace.companyFiles.manage') ?? false
+})
 
 // 默认盘符 & 根目录（如后台未配置时使用）
 const DEFAULT_DRIVE_ID = ((import.meta as any).env?.VITE_WORKSPACE_DRIVE_ID as string | undefined)?.toLowerCase?.() || 'd'

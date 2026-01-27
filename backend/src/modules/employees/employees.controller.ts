@@ -79,6 +79,23 @@ export class EmployeesController {
   }
 
   /**
+   * 获取用于前端选择的基础员工列表（会议室参会人等）
+   * 说明：
+   * - 只返回基础字段（id / nickname / department / avatar / employmentStatus / workStatus）；
+   * - 对所有已登录用户开放，不再要求员工管理权限；
+   * - 避免暴露敏感账号和联系方式。
+   */
+  @Get('options/basic')
+  async getBasicOptions(@Req() req: any) {
+    const user = await this.getUserFromRequest(req);
+    if (!user) {
+      throw new UnauthorizedException('未登录');
+    }
+
+    return this.employeesService.findAllBasicForOptions();
+  }
+
+  /**
    * 获取员工统计信息（工作群组需要，所有登录用户都可以访问）
    */
   @Get('statistics')

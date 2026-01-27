@@ -40,6 +40,9 @@ export default {
   // 公司通告和新闻
   companyAnnouncements: '公司通告',
   industryNews: '行业新闻',
+
+  // 工作空间快捷入口
+  workspaceShortcutsTitle: '工作空间快捷入口',
   
   // 欢迎标语
   greetings: {

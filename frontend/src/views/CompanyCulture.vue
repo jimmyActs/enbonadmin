@@ -6,6 +6,7 @@
         <div class="hero-header">
           <h1>{{ hero.title }}</h1>
           <el-button
+            v-if="canManageWorkspace"
             size="small"
             text
             type="primary"
@@ -55,6 +56,7 @@
           <h2>{{ $t('workspace.companyCulturePage.coreTeamTitle') }}</h2>
         </div>
         <el-button
+          v-if="canManageWorkspace"
           size="small"
           type="primary"
           :icon="Plus"
@@ -85,7 +87,7 @@
             <h5>{{ member.name }}</h5>
             <p>{{ member.title }}</p>
           </div>
-          <div class="staff-actions">
+          <div class="staff-actions" v-if="canManageWorkspace">
             <el-button
               size="small"
               text
@@ -116,6 +118,7 @@
           <h2>{{ $t('workspace.companyCulturePage.albumTitle') }}</h2>
         </div>
         <el-button
+          v-if="canManageWorkspace"
           size="small"
           type="primary"
           :icon="Plus"
@@ -382,7 +385,7 @@
             <h3 class="preview-title">{{ previewAlbum.title }}</h3>
             <p class="preview-subtitle">{{ previewAlbum.subtitle }}</p>
           </div>
-          <div class="preview-actions" v-if="previewAlbum">
+          <div class="preview-actions" v-if="previewAlbum && canManageWorkspace">
             <el-button
               size="small"
               text
@@ -452,7 +455,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { UploadProps } from 'element-plus'
@@ -464,8 +467,25 @@ import {
   Close
 } from '@element-plus/icons-vue'
 import { getApiBaseURL } from '../api/config'
+import { useUserStore } from '../store/user'
 
 const { t } = useI18n()
+const userStore = useUserStore()
+
+// 是否具备“工作空间内容管理”权限：用于控制公司文化编辑按钮的显示
+const canManageWorkspace = computed(() => {
+  const role = userStore.userInfo?.role
+  if (role === 'super_admin') return true
+  // 使用后端的权限点 workspace.companyFiles.manage 作为“工作空间内容管理”的统一开关
+  return userStore.hasPermission?.('workspace.companyFiles.manage') ?? false
+})
+
+// 如果是已登录状态但还没拉取权限点，这里懒加载一次（避免首屏空白时多请求）
+onMounted(() => {
+  if (userStore.isLoggedIn && !userStore.permissions.length) {
+    userStore.loadPermissions()
+  }
+})
 
 interface HeroInfo {
   title: string

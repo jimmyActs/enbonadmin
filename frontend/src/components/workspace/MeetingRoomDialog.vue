@@ -96,10 +96,18 @@
         </el-form-item>
 
         <el-form-item :label="$t('workspace.meetingRoom.department')" prop="department">
-          <el-input
+          <el-select
             v-model="bookingForm.department"
             :placeholder="$t('workspace.meetingRoom.departmentPlaceholder')"
-          />
+            style="width: 100%"
+          >
+            <el-option
+              v-for="dept in departmentOptions"
+              :key="dept.value"
+              :label="dept.label"
+              :value="dept.value"
+            />
+          </el-select>
         </el-form-item>
 
         <el-form-item :label="$t('workspace.meetingRoom.meetingTitle')" prop="title">
@@ -180,7 +188,11 @@
               </template>
             </el-table-column>
             <el-table-column prop="roomName" :label="$t('workspace.meetingRoom.room')" width="120" />
-            <el-table-column prop="department" :label="$t('workspace.meetingRoom.department')" width="120" />
+            <el-table-column prop="department" :label="$t('workspace.meetingRoom.department')" width="140">
+              <template #default="{ row }">
+                {{ getDepartmentName(row.department || '') }}
+              </template>
+            </el-table-column>
             <el-table-column prop="applicantName" :label="$t('workspace.meetingRoom.applicant')" width="100">
               <template #default="{ row }">
                 {{ row.applicantName || '-' }}
@@ -238,7 +250,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { VideoCamera, OfficeBuilding } from '@element-plus/icons-vue'
 import { useUserStore } from '../../store/user'
-import { getEmployees } from '../../api/employees'
+import { getEmployeeOptions } from '../../api/employees'
 import api, { getApiBaseURL } from '../../api/config'
 
 interface Props {
@@ -316,7 +328,7 @@ const allEmployees = ref<Array<{ id: number; nickname: string; department?: stri
 
 const bookingForm = ref({
   roomId: '',
-  department: '',
+  department: '', // 存储部门编码，例如 'planning'、'sales'
   title: '',
   startTime: '',
   endTime: '',
@@ -326,7 +338,7 @@ const bookingForm = ref({
 
 const bookingRules: FormRules = {
   roomId: [{ required: true, message: t('workspace.meetingRoom.selectRoom'), trigger: 'change' }],
-  department: [{ required: true, message: t('workspace.meetingRoom.departmentRequired'), trigger: 'blur' }],
+  department: [{ required: true, message: t('workspace.meetingRoom.departmentRequired'), trigger: 'change' }],
   title: [{ required: true, message: t('workspace.meetingRoom.titleRequired'), trigger: 'blur' }],
   startTime: [{ required: true, message: t('workspace.meetingRoom.startTimeRequired'), trigger: 'change' }],
   endTime: [{ required: true, message: t('workspace.meetingRoom.endTimeRequired'), trigger: 'change' }],
@@ -515,7 +527,32 @@ const handleClose = () => {
   }
 }
 
-// 获取部门名称
+// 部门下拉选项（使用与工作群组一致的部门编码）
+const departmentOptions = [
+  { value: 'planning', labelKey: 'planning' },
+  { value: 'sales', labelKey: 'sales' },
+  { value: 'tech', labelKey: 'tech' },
+  { value: 'finance', labelKey: 'finance' },
+  { value: 'hr', labelKey: 'hr' },
+  { value: 'domestic', labelKey: 'domestic' },
+  { value: 'management', labelKey: 'management' },
+].map((item) => ({
+  value: item.value,
+  label: (() => {
+    const map: Record<string, string> = {
+      planning: t('workgroup.departments.planning'),
+      sales: t('workgroup.departments.sales'),
+      tech: t('workgroup.departments.tech'),
+      finance: t('workgroup.departments.finance'),
+      hr: t('workgroup.departments.hr'),
+      domestic: t('workgroup.departments.domestic'),
+      management: t('workgroup.departments.management'),
+    }
+    return map[item.value] || item.value
+  })(),
+}))
+
+// 获取部门名称（用于显示在卡片和记录表中）
 const getDepartmentName = (dept: string): string => {
   const deptMap: Record<string, string> = {
     planning: t('workgroup.departments.planning'),
@@ -567,12 +604,11 @@ const getAvatarUrl = (emp: any): string => {
   return `${baseURL}/users/avatar/${emp.avatar}`
 }
 
-// 加载所有员工（排除系统管理员）
+// 加载所有员工（基础信息，排除系统管理员）
 const loadAllEmployees = async () => {
   try {
-    const employees = await getEmployees()
-    // 过滤掉系统管理员（super_admin角色）
-    allEmployees.value = employees.filter(emp => emp.role !== 'super_admin')
+    const employees = await getEmployeeOptions()
+    allEmployees.value = employees
   } catch (error: any) {
     console.error('Failed to load employees:', error)
   }
