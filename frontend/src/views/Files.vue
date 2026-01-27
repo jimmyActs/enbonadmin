@@ -987,6 +987,10 @@ const handleRenameDriveConfirm = async () => {
 
 // 生命周期
 onMounted(() => {
+  // 小屏设备默认使用卡片视图，避免表格在窄屏下挤掉文件名等信息
+  if (window.innerWidth <= 768) {
+    viewMode.value = 'grid'
+  }
   loadDrives()
 })
 

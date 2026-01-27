@@ -1,12 +1,16 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Put, UseGuards, Req, ForbiddenException } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Put, UseGuards, ForbiddenException, Req } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
 import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
+import { JwtService } from '@nestjs/jwt';
 
 @Controller('permissions')
 @UseGuards(PermissionsGuard)
 export class PermissionsController {
-  constructor(private readonly permissionsService: PermissionsService) {}
+  constructor(
+    private readonly permissionsService: PermissionsService,
+    private readonly jwtService: JwtService,
+  ) {}
 
   /**
    * 获取全部角色模板列表
@@ -44,11 +48,26 @@ export class PermissionsController {
    */
   @Get('me')
   async getMyPermissions(@Req() req: any) {
-    const user = req.user as { id?: number } | undefined;
-    if (!user?.id) {
+    const authHeader: string | undefined = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
       throw new ForbiddenException('未登录或登录状态已失效');
     }
-    const codes = await this.permissionsService.getUserPermissions(user.id);
+
+    const token = authHeader.substring(7);
+    let userId: number | undefined;
+
+    try {
+      const payload: any = this.jwtService.verify(token);
+      userId = payload.sub;
+    } catch {
+      throw new ForbiddenException('登录状态已失效，请重新登录');
+    }
+
+    if (!userId) {
+      throw new ForbiddenException('未登录或登录状态已失效');
+    }
+
+    const codes = await this.permissionsService.getUserPermissions(userId);
     return { permissions: codes };
   }
 
