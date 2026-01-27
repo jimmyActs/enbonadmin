@@ -29,22 +29,8 @@
                 {{ getLocale() === 'en-US' ? drive.departmentNameEn : drive.departmentName || drive.name }}
               </div>
               
-              <!-- 进度条和剩余空间 -->
-              <div class="department-card-quota-section">
-                <el-progress
-                  :percentage="getRemainingPercent(drive)"
-                  :color="getRemainingPercent(drive) < 20 ? '#f56c6c' : '#67c23a'"
-                  :stroke-width="6"
-                  :show-text="false"
-                  class="quota-progress"
-                />
-                <div 
-                  class="department-card-quota"
-                  :class="{ 'quota-warning': getRemainingPercent(drive) < 20 }"
-                >
-                  {{ getRemainingPercent(drive).toFixed(1) }}%
-                </div>
-              </div>
+              <!-- 容量进度条：出于性能与简洁性考虑，暂时隐藏
+                   如果未来需要展示真实容量，可在此处重新启用并配合后端优化扫描逻辑 -->
               
               <el-icon v-if="drive.requiresPassword && !drive.hasAccess" class="department-lock-icon">
                 <Lock />
