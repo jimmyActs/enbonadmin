@@ -222,39 +222,12 @@ const userPermissionCodes = ref<string[]>([])
 // 存储盘配置
 const driveConfigs = ref<DriveConfig[]>([])
 const savingDrives = ref(false)
-// 工作空间存储配置
+// 工作空间存储配置（原始数据）
 const workspaceConfigs = ref<WorkspaceStorageConfig[]>([])
 
-// 将后端存的 workspaceConfigs 和表格行做一个映射，保证即使后端还没配置也有默认值
-const workspaceStorageRows = computed({
-  get: () => {
-    const byKey: Record<string, WorkspaceStorageConfig> = {}
-    workspaceConfigs.value.forEach(c => {
-      byKey[c.moduleKey] = c
-    })
-    const ensure = (moduleKey: string, defaultRoot: string, label: string): WorkspaceStorageConfig & { label: string } => {
-      const exist = byKey[moduleKey]
-      return {
-        moduleKey,
-        driveId: exist?.driveId || (driveConfigs.value[0]?.id || 'd'),
-        rootPath: exist?.rootPath || defaultRoot,
-        label,
-      }
-    }
-    return [
-      ensure('company-files', 'company-files', '公司文件'),
-      ensure('software-downloads', 'software-downloads', '软件下载'),
-      ensure('company-culture', 'company-culture', '公司文化'),
-    ]
-  },
-  set: (rows) => {
-    workspaceConfigs.value = rows.map((r: any) => ({
-      moduleKey: r.moduleKey,
-      driveId: r.driveId,
-      rootPath: r.rootPath,
-    }))
-  },
-})
+// 显示在表格中的行数据（可编辑）
+type WorkspaceStorageRow = WorkspaceStorageConfig & { label: string }
+const workspaceStorageRows = ref<WorkspaceStorageRow[]>([])
 
 const isSuperAdmin = computed(() => userStore.userInfo?.role === 'super_admin')
 
@@ -370,6 +343,28 @@ const loadData = async () => {
     allPermissions.value = perms.permissions || []
     driveConfigs.value = (drives as DriveConfig[]) || []
     workspaceConfigs.value = (wsCfgs as WorkspaceStorageConfig[]) || []
+
+    // 初始化工作空间存储配置行（带默认值和 label）
+    const byKey: Record<string, WorkspaceStorageConfig> = {}
+    workspaceConfigs.value.forEach(c => {
+      byKey[c.moduleKey] = c
+    })
+
+    const ensureRow = (moduleKey: string, defaultRoot: string, label: string): WorkspaceStorageRow => {
+      const exist = byKey[moduleKey]
+      return {
+        moduleKey,
+        driveId: exist?.driveId || (driveConfigs.value[0]?.id || 'd'),
+        rootPath: exist?.rootPath || defaultRoot,
+        label,
+      }
+    }
+
+    workspaceStorageRows.value = [
+      ensureRow('company-files', 'company-files', '公司文件'),
+      ensureRow('software-downloads', 'software-downloads', '软件下载'),
+      ensureRow('company-culture', 'company-culture', '公司文化'),
+    ]
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))
   }
@@ -384,9 +379,15 @@ const handleSaveDrives = async () => {
   try {
     savingDrives.value = true
     await updateAdminDrives(driveConfigs.value)
-    if (workspaceConfigs.value.length) {
-      await updateWorkspaceStorageConfigs(workspaceConfigs.value)
-    }
+
+    // 将当前表格中的工作空间配置行同步到后端
+    const payload: WorkspaceStorageConfig[] = workspaceStorageRows.value.map(row => ({
+      moduleKey: row.moduleKey,
+      driveId: row.driveId,
+      rootPath: row.rootPath,
+    }))
+    await updateWorkspaceStorageConfigs(payload)
+
     ElMessage.success(t('common.updateSuccess'))
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))

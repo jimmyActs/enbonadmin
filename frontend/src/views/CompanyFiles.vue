@@ -547,12 +547,12 @@ const loadFiles = async () => {
   if (!activeCategory.value || !activeCategoryConfig.value) return
   loading.value = true
   try {
-    const list = await getFileList(driveId.value, fullPath.value).catch(async (error: any) => {
-      // 如果当前分类目录不存在，自动创建后再读取
+    const list = await getFileList(driveId.value, fullPath.value).catch((error: any) => {
+      // 如果当前分类目录不存在：
+      // - 以前这里会调用 createFolder 自动创建根目录，但普通员工没有上传/建目录权限，会导致 403 报错；
+      // - 现在改为：404 直接视为“该分类下还没有任何文件/文件夹”，返回空数组即可，避免无意义的 403。
       if (error?.response?.status === 404) {
-        const cat = activeCategoryConfig.value
-        await createFolder(driveId.value, rootPath.value, cat.folder)
-        return await getFileList(driveId.value, fullPath.value)
+        return []
       }
       throw error
     })
