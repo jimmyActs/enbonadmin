@@ -1031,6 +1031,14 @@ const loadCategoriesAndSeries = async () => {
 }
 
 onMounted(async () => {
+  // 进入页面时刷新一次当前账号的权限，确保刚被分配/收回权限后按钮显示与后端一致
+  try {
+    await userStore.loadPermissions?.()
+  } catch (e) {
+    // 忽略权限刷新失败，仅影响前端按钮显示
+    console.warn('刷新权限失败，仅影响前端按钮显示', e)
+  }
+
   await loadCategoriesAndSeries()
   await loadFiles()
 })
@@ -1325,6 +1333,66 @@ onMounted(async () => {
   .empty-state {
     grid-column: 1/-1;
     margin-top: 32px;
+  }
+
+  // 公司文件在平板和手机端的适配
+  @media (max-width: 1200px) {
+    padding: 24px 20px 32px;
+
+    .category-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 768px) {
+    padding: 20px 12px 28px;
+
+    .container {
+      max-width: 100%;
+    }
+
+    .header {
+      margin-bottom: 20px;
+
+      h1 {
+        font-size: 24px;
+      }
+    }
+
+    .category-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .content-area {
+      padding: 16px 14px 20px;
+      border-radius: 20px;
+    }
+
+    .content-nav {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .nav-right {
+      width: 100%;
+
+      .search-input {
+        width: 100%;
+      }
+    }
+
+    .file-grid {
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .category-grid {
+      grid-template-columns: 1fr;
+    }
   }
 }
 </style>

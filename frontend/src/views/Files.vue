@@ -1509,5 +1509,61 @@ watch(showShareDialog, (val) => {
     color: #909399;
     margin-top: 4px;
   }
+
+  // 文件管理在平板和手机端的适配
+  @media (max-width: 1024px) {
+    .files-layout {
+      flex-direction: column;
+      min-height: auto;
+    }
+
+    .files-layout .drives-sidebar {
+      width: 100%;
+      min-width: 0;
+      border-right: none;
+      border-bottom: 1px solid #e5e5e7;
+      padding-right: 0;
+      padding-bottom: 16px;
+      margin-bottom: 16px;
+    }
+
+    .files-layout .file-browser .file-content .toolbar {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+
+      .toolbar-actions {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+      }
+    }
+  }
+
+  @media (max-width: 768px) {
+    .files-layout .file-browser .file-content .toolbar .breadcrumb {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+
+    .files-layout .file-browser .file-content .file-list .file-grid-view {
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .files-layout .drives-sidebar .departments-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 480px) {
+    .files-layout .file-browser .file-content .toolbar-actions {
+      width: 100%;
+      justify-content: flex-start;
+    }
+
+    .files-layout .file-browser .file-content .toolbar-actions .el-button {
+      flex: 1 1 auto;
+    }
+  }
 }
 </style>

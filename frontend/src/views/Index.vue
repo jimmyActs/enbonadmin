@@ -240,14 +240,8 @@
           </div>
         </div>
 
-        <!-- 工作空间快捷入口 -->
+        <!-- 工作空间快捷入口：与上方快捷链接统一为两排卡片，不再单独标题 -->
         <div class="workspace-shortcuts fade-in-delay-3">
-          <div class="workspace-shortcuts-header">
-            <div class="card-header">
-              <el-icon><FolderOpened /></el-icon>
-              <span>{{ $t('index.workspaceShortcutsTitle') }}</span>
-            </div>
-          </div>
           <div class="workspace-shortcuts-grid">
             <div
               v-for="item in workspaceShortcuts"
@@ -2968,24 +2962,11 @@ onBeforeUnmount(() => {
       }
 
       .workspace-shortcuts {
-        margin-top: 28px;
-
-        .workspace-shortcuts-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 12px;
-
-          .card-header span {
-            font-size: 14px;
-            font-weight: 600;
-            letter-spacing: -0.01em;
-          }
-        }
+        margin-top: 16px;
 
         .workspace-shortcuts-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
           gap: 16px;
         }
 
@@ -4315,6 +4296,47 @@ onBeforeUnmount(() => {
         padding: 0 32px !important;
       }
     }
+  }
+}
+
+// 首页顶部与快捷入口的响应式适配（平板 / 手机）
+@media (max-width: 1024px) {
+  .index-container .welcome-section {
+    padding: 20px 16px;
+  }
+
+  .index-container .user-profile-card {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .index-container {
+    padding: 0 8px;
+  }
+
+  .index-container .welcome-section {
+    padding: 16px 12px;
+    border-radius: 16px;
+  }
+
+  .index-container .welcome-greeting {
+    font-size: 24px;
+  }
+
+  .index-container .quick-links {
+    grid-template-columns: 1fr;
+  }
+
+  .index-container .workspace-shortcuts .workspace-shortcuts-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .index-container .welcome-greeting {
+    font-size: 20px;
   }
 }
 

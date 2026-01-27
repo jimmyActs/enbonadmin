@@ -866,13 +866,14 @@ const getOverseasEmployees = (): Employee[] => {
   return overseas
 }
 
-// 获取出差目的地（例如 workStatus = 'away:韩国' -> 返回 '韩国'）
+// 获取出差/驻外目的地（例如 workStatus = 'away:japan' 或 'overseas:japan' -> 返回 '日本 / Japan'）
 const getAwayDestination = (employee: Employee): string => {
   const status = employee.workStatus || ''
-  if (status.startsWith('away')) {
+  if (status.startsWith('away') || status.startsWith('overseas')) {
     const parts = status.split(':')
     if (parts.length > 1 && parts[1].trim()) {
-      return parts[1].trim()
+      const code = parts[1].trim()
+      return destinationLabelMap[code] || code
     }
   }
   return ''
@@ -880,8 +881,8 @@ const getAwayDestination = (employee: Employee): string => {
 
 // 获取展示用地区信息：preferAway 为 true 时优先使用出差目的地，否则使用国家 / 城市
 const getDisplayLocation = (employee: Employee, preferAway = false): string => {
+  const dest = getAwayDestination(employee)
   if (preferAway) {
-    const dest = getAwayDestination(employee)
     if (dest) return dest
   }
   const country = employee.country || ''
@@ -889,6 +890,8 @@ const getDisplayLocation = (employee: Employee, preferAway = false): string => {
   if (country && city) return `${country} · ${city}`
   if (country) return country
   if (city) return city
+  // 如果没有国家/城市信息，但有出差/驻外目的地，则也用于展示
+  if (dest) return dest
   return '-'
 }
 
@@ -1765,9 +1768,30 @@ onBeforeUnmount(() => {
 }
 
 // 响应式设计
+@media (max-width: 1024px) {
+  .workgroup-container {
+    padding: 20px;
+
+    .departments-toolbar {
+      flex-direction: column;
+      align-items: stretch;
+
+      .departments-search {
+        width: 100%;
+      }
+    }
+  }
+}
+
 @media (max-width: 768px) {
   .workgroup-container {
     padding: 16px;
+
+    .statistics-card {
+      .statistics-grid {
+        grid-template-columns: 1fr;
+      }
+    }
 
     .departments-grid {
       grid-template-columns: 1fr;

@@ -782,5 +782,49 @@ const getRowClassName = () => {
       }
     }
   }
+
+  // 工作空间在平板和手机端的适配
+  @media (max-width: 768px) {
+    padding: 16px;
+
+    .page-title {
+      font-size: 22px;
+    }
+
+    .workspace-tabs {
+      :deep(.el-tabs__header) {
+        border-radius: 12px;
+        padding: 4px;
+      }
+    }
+
+    .application-records-card {
+      margin-top: 16px;
+
+      .application-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+
+        .new-application-btn {
+          width: 100%;
+        }
+      }
+
+      .table-container {
+        overflow-x: auto;
+      }
+    }
+  }
+
+  @media (max-width: 480px) {
+    .quick-cards {
+      gap: 12px;
+
+      .quick-card-item {
+        padding: 16px;
+      }
+    }
+  }
 }
 </style>
