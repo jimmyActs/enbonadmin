@@ -6,12 +6,14 @@ import { CompanyFileSeries } from './entities/company-file-series.entity';
 import { CompanyFilesService } from './company-files.service';
 import { CompanyFilesController } from './company-files.controller';
 import { PermissionsModule } from '../permissions/permissions.module';
+import { UsersModule } from '../users/users.module';
 import { jwtConfig } from '../../config/jwt.config';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([CompanyFileCategory, CompanyFileSeries]),
     PermissionsModule,
+    UsersModule,
     JwtModule.register(jwtConfig()),
   ],
   controllers: [CompanyFilesController],
