@@ -67,11 +67,59 @@
             >
               新建文件夹
             </el-button>
+            <el-button
+              v-if="canManageWorkspace && activeCategory === 'ai-assets'"
+              size="small"
+              :icon="Link"
+              @click="openLinkDialog()"
+            >
+              新建链接
+            </el-button>
           </div>
         </div>
 
         <!-- 文件网格 -->
         <div class="file-grid" v-loading="loading">
+          <!-- AI 链接卡片（仅在 AI 资产库显示） -->
+          <div
+            v-if="activeCategory === 'ai-assets'"
+            v-for="link in aiLinks"
+            :key="'link-' + link.id"
+            class="file-item ai-link-card"
+          >
+            <div class="file-preview ai-link-icon" @click="openAiLink(link)">
+              🔗
+            </div>
+            <h4 class="file-name" :title="link.title">
+              {{ link.title }}
+            </h4>
+            <p class="file-meta">
+              {{ link.description || 'AI 平台链接' }}
+            </p>
+            <div class="file-actions ai-link-actions">
+              <button class="btn-sm btn-view" @click="openAiLink(link)">
+                打开
+              </button>
+              <el-dropdown
+                v-if="canManageWorkspace"
+                class="more-dropdown"
+                trigger="click"
+                @command="(command: 'edit' | 'delete') => handleAiLinkCommand(command, link)"
+              >
+                <span class="btn-sm btn-more">
+                  <el-icon><MoreFilled /></el-icon>
+                </span>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                    <el-dropdown-item command="delete">删除</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+            </div>
+          </div>
+
+          <!-- 普通文件/文件夹 -->
           <div
             v-for="item in filteredFiles"
             :key="item.path"
@@ -227,6 +275,41 @@
           </el-button>
         </template>
       </el-dialog>
+
+      <!-- 新建 / 编辑 AI 链接弹窗 -->
+      <el-dialog
+        v-model="showLinkDialog"
+        :title="editingLink ? '编辑链接' : '新建链接'"
+        width="480px"
+        :close-on-click-modal="false"
+      >
+        <el-form label-position="top">
+          <el-form-item label="标题 / 平台名称">
+            <el-input v-model="aiLinkForm.value.title" placeholder="例如：Midjourney / OpenAI / Stable Diffusion" />
+          </el-form-item>
+          <el-form-item label="链接 URL">
+            <el-input v-model="aiLinkForm.value.url" placeholder="https://..." />
+          </el-form-item>
+          <el-form-item label="简介 / 用途说明">
+            <el-input v-model="aiLinkForm.value.description" type="textarea" :rows="2" />
+          </el-form-item>
+          <el-form-item label="账号">
+            <el-input v-model="aiLinkForm.value.account" placeholder="可选：共享账号" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="aiLinkForm.value.password" placeholder="可选：共享密码" />
+          </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="aiLinkForm.value.notes" type="textarea" :rows="2" placeholder="可记录登录方式、注意事项等" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showLinkDialog = false">{{ $t('common.cancel') }}</el-button>
+          <el-button type="primary" @click="saveAiLink">
+            {{ $t('common.confirm') }}
+          </el-button>
+        </template>
+      </el-dialog>
     </div>
   </div>
 </template>
@@ -254,6 +337,7 @@ import {
   VideoCamera,
   Promotion,
   Collection,
+  Link,
 } from '@element-plus/icons-vue'
 import {
   getFileList,
@@ -272,6 +356,7 @@ import {
   type CompanyFileCategory,
   type CompanyFileSeries,
 } from '../api/company-files'
+import { getAiLinks, createAiLink, updateAiLink, deleteAiLink, type AiLink as ApiAiLink } from '../api/ai-links'
 import { useUserStore } from '../store/user'
 
 const { t, locale } = useI18n()
@@ -334,6 +419,30 @@ const uploadFileList = ref<UploadUserFile[]>([])
 const uploading = ref(false)
 const selectedSeriesForUpload = ref('')
 const selectedSeriesForFolder = ref('')
+
+// AI 链接相关状态（仅在 AI 资产库下使用）
+interface AiLinkForm {
+  id: number | null
+  title: string
+  url: string
+  description: string
+  account: string
+  password: string
+  notes: string
+}
+
+const aiLinks = ref<ApiAiLink[]>([])
+const showLinkDialog = ref(false)
+const editingLink = ref<ApiAiLink | null>(null)
+const aiLinkForm = ref<AiLinkForm>({
+  id: null,
+  title: '',
+  url: '',
+  description: '',
+  account: '',
+  password: '',
+  notes: '',
+})
 
 // 顶部展示用的分类卡片（已适配中英双语 & 后端配置）
 const categoryConfigs = computed(() => {
@@ -545,6 +654,17 @@ const loadFiles = async () => {
       throw error
     })
     fileList.value = list || []
+
+    // 如果是在 AI 资产库分类下，同时加载 AI 链接列表
+    if (activeCategory.value === 'ai-assets') {
+      try {
+        aiLinks.value = await getAiLinks()
+      } catch (e) {
+        console.error('加载 AI 链接失败', e)
+      }
+    } else {
+      aiLinks.value = []
+    }
   } catch (error: any) {
     console.error('加载公司文件失败:', error)
     ElMessage.error(error?.message || t('common.error'))
@@ -750,6 +870,98 @@ const handleUploadSubmit = async () => {
   } finally {
     uploading.value = false
   }
+}
+
+// AI 链接相关操作 ----------------------------------------------
+
+const openLinkDialog = (link?: ApiAiLink) => {
+  if (link) {
+    editingLink.value = link
+    aiLinkForm.value = {
+      id: link.id,
+      title: link.title,
+      url: link.url,
+      description: link.description || '',
+      account: link.account || '',
+      password: link.password || '',
+      notes: link.notes || '',
+    }
+  } else {
+    editingLink.value = null
+    aiLinkForm.value = {
+      id: null,
+      title: '',
+      url: '',
+      description: '',
+      account: '',
+      password: '',
+      notes: '',
+    }
+  }
+  showLinkDialog.value = true
+}
+
+const saveAiLink = async () => {
+  if (!aiLinkForm.value.title.trim() || !aiLinkForm.value.url.trim()) {
+    ElMessage.warning('请填写标题和链接 URL')
+    return
+  }
+
+  try {
+    if (editingLink.value) {
+      const updated = await updateAiLink(editingLink.value.id, {
+        title: aiLinkForm.value.title,
+        url: aiLinkForm.value.url,
+        description: aiLinkForm.value.description || undefined,
+        account: aiLinkForm.value.account || undefined,
+        password: aiLinkForm.value.password || undefined,
+        notes: aiLinkForm.value.notes || undefined,
+      })
+      const idx = aiLinks.value.findIndex((l) => l.id === editingLink.value?.id)
+      if (idx !== -1) {
+        aiLinks.value[idx] = updated
+      }
+    } else {
+      const created = await createAiLink({
+        id: 0 as any, // will be ignored by backend
+        title: aiLinkForm.value.title,
+        url: aiLinkForm.value.url,
+        description: aiLinkForm.value.description || undefined,
+        account: aiLinkForm.value.account || undefined,
+        password: aiLinkForm.value.password || undefined,
+        notes: aiLinkForm.value.notes || undefined,
+      })
+      aiLinks.value.push(created)
+    }
+
+    showLinkDialog.value = false
+    ElMessage.success(t('common.saveSuccess'))
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  }
+}
+
+const handleAiLinkCommand = async (command: 'edit' | 'delete', link: ApiAiLink) => {
+  if (command === 'edit') {
+    openLinkDialog(link)
+  } else if (command === 'delete') {
+    try {
+      await ElMessageBox.confirm(`确定要删除链接「${link.title}」吗？`, t('common.warning'), { type: 'warning' })
+      await deleteAiLink(link.id)
+      aiLinks.value = aiLinks.value.filter((l) => l.id !== link.id)
+      ElMessage.success(t('common.deleteSuccess'))
+    } catch (error: any) {
+      if (error !== 'cancel') {
+        ElMessage.error(error?.message || t('common.error'))
+      }
+    }
+  }
+}
+
+const openAiLink = (link: ApiAiLink) => {
+  if (!link.url) return
+  const target = link.url.startsWith('http://') || link.url.startsWith('https://') ? link.url : `https://${link.url}`
+  window.open(target, '_blank')
 }
 
 // 工具函数：格式化
@@ -1253,6 +1465,19 @@ onMounted(async () => {
     opacity: 0;
     transform: translateY(8px);
     transition: all 0.25s;
+  }
+
+  // AI 链接卡片样式
+  .ai-link-card {
+    .ai-link-icon {
+      font-size: 32px;
+    }
+
+    .ai-link-actions {
+      opacity: 1;
+      transform: none;
+      margin-top: auto;
+    }
   }
 
   .file-item:hover .file-actions {

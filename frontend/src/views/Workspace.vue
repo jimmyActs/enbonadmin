@@ -89,6 +89,21 @@
           <div class="quick-card-desc">{{ $t('workspace.quickCards.toolsDesc') }}</div>
         </div>
       </div>
+
+      <!-- 开发文档（仅超级管理员可见） -->
+      <div
+        v-if="isSuperAdmin"
+        class="quick-card-item fade-in-delay-7"
+        @click="openDevDocs"
+      >
+        <div class="quick-card-icon tools-icon">
+          <el-icon><Notebook /></el-icon>
+        </div>
+        <div class="quick-card-content">
+          <div class="quick-card-title">开发文档</div>
+          <div class="quick-card-desc">内部教程 / 演示 / 变更说明</div>
+        </div>
+      </div>
     </div>
 
     <!-- 工作空间模块标签页 -->
@@ -299,6 +314,14 @@ const availableModules = computed(() => {
     userModules.includes(config.key as WorkspaceModule)
   )
 })
+
+// 打开开发文档（静态 HTML），路径为 /docs/index.html
+const openDevDocs = () => {
+  window.open('/docs/index.html', '_blank')
+}
+
+// 是否超级管理员（用于显示开发文档入口）
+const isSuperAdmin = computed(() => userStore.userInfo?.role === 'super_admin')
 
 // 当前激活的模块
 const activeModule = ref<string>('')

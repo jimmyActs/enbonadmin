@@ -24,6 +24,7 @@ import { SoftwareDownloadsModule } from './modules/software-downloads/software-d
 import { WorkspaceStorageModule } from './modules/workspace-storage/workspace-storage.module';
 import { OnlineStatusModule } from './modules/online-status/online-status.module';
 import { CompanyCultureModule } from './modules/company-culture/company-culture.module';
+import { AiLinksModule } from './modules/ai-links/ai-links.module';
 
 @Module({
   imports: [
@@ -35,7 +36,8 @@ import { CompanyCultureModule } from './modules/company-culture/company-culture.
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'frontend', 'dist'),
       // 保留 /api 开头的接口由 Nest 处理，而不是被静态文件抢占
-      exclude: ['/api*'],
+      // 注意：这里需要使用 '/api/*' 这种形式，避免 path-to-regexp 报错
+      exclude: ['/api/*'],
     }),
     TypeOrmModule.forRoot(databaseConfig()),
     AuthModule,
@@ -56,6 +58,7 @@ import { CompanyCultureModule } from './modules/company-culture/company-culture.
     WorkspaceStorageModule,
     OnlineStatusModule,
     CompanyCultureModule,
+    AiLinksModule,
   ],
   controllers: [AppController],
   providers: [AppService],
