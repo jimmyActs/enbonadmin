@@ -8,7 +8,11 @@ export default defineConfig({
     host: '0.0.0.0', // 允许外部访问
     port: 5173,
     strictPort: false, // 如果端口被占用，自动尝试下一个可用端口
-    allowedHosts: ['polybasic-unobstruently-jamari.ngrok-free.dev'],
+    // 允许通过 Cloudflare Tunnel / 自定义域名访问开发服务
+    allowedHosts: [
+      'polybasic-unobstruently-jamari.ngrok-free.dev', // 之前使用的 ngrok 域名（保留以防还要用）
+      'admin.enbon.top', // 现在使用的 Cloudflare / 自定义域名
+    ],
     // 本地开发 & ngrok 访问时，将 /api 的请求代理到后端 http://localhost:3002
     proxy: {
       '/api': {
