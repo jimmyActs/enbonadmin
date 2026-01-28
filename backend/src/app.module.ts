@@ -36,9 +36,8 @@ import { AiLinksModule } from './modules/ai-links/ai-links.module';
     ServeStaticModule.forRoot({
       rootPath: join(__dirname, '..', '..', 'frontend', 'dist'),
       // 保留 /api 开头的接口由 Nest 处理，而不是被静态文件抢占
-      // 这里改用正则，完全绕过 path-to-regexp 的解析，避免版本差异带来的报错
-      // /^\/api/ 会匹配 /api 以及所有 /api/** 路径
-      exclude: [/^\/api/],
+      // 使用 path-to-regexp 官方支持的通配写法：'/api/*' 匹配所有 /api/** 路径
+      exclude: ['/api/*'],
     }),
     TypeOrmModule.forRoot(databaseConfig()),
     AuthModule,
