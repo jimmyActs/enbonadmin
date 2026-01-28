@@ -681,5 +681,40 @@ onMounted(() => {
     }
   }
 }
+
+// 小屏幕下的个人设置：上下布局、表单全宽显示
+@media (max-width: 992px) {
+  .profile-container {
+    padding: 16px;
+
+    :deep(.el-row) {
+      display: block;
+    }
+
+    :deep(.el-col-8),
+    :deep(.el-col-16) {
+      max-width: 100% !important;
+      flex: 0 0 100% !important;
+    }
+
+    .avatar-section {
+      margin-bottom: 24px;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .profile-container {
+    padding: 12px;
+
+    :deep(.el-form-item__label) {
+      width: 90px !important;
+    }
+
+    :deep(.el-form-item__content) {
+      margin-left: 90px !important;
+    }
+  }
+}
 </style>
 

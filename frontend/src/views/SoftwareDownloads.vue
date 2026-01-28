@@ -41,20 +41,6 @@
             >
               {{ t('common.back') }}
             </el-button>
-            <div
-              v-if="isAtCategoryRoot"
-              class="series-tabs"
-            >
-              <div
-                v-for="tab in visibleSeriesTabs"
-                :key="tab.key"
-                class="s-tab"
-                :class="{ active: activeSeries === tab.key }"
-                @click="activeSeries = tab.key"
-              >
-                {{ tab.label }}
-              </div>
-            </div>
           </div>
 
           <div class="nav-right">
@@ -162,22 +148,6 @@
           append-to-body
         >
           <el-form label-position="top">
-            <el-form-item v-if="isAtCategoryRoot" :label="t('workspace.softwareDownloadsPage.typeLabel')">
-              <el-select
-                v-model="selectedSeriesForFolder"
-                filterable
-                allow-create
-                default-first-option
-                :placeholder="t('workspace.softwareDownloadsPage.typePlaceholder')"
-              >
-                <el-option
-                  v-for="opt in seriesOptionsForCurrentCategory"
-                  :key="opt.slug"
-                  :label="opt.label"
-                  :value="opt.slug"
-                />
-              </el-select>
-            </el-form-item>
             <el-form-item :label="t('workspace.softwareDownloadsPage.folderNameLabel')">
               <el-input
                 v-model="newFolderName"
@@ -201,26 +171,7 @@
           :close-on-click-modal="false"
           append-to-body
         >
-          <div class="upload-form">
-            <el-form label-position="top">
-              <el-form-item v-if="isAtCategoryRoot" :label="t('workspace.softwareDownloadsPage.typeLabel')">
-                <el-select
-                  v-model="selectedSeriesForUpload"
-                  filterable
-                  allow-create
-                  default-first-option
-                  :placeholder="t('workspace.softwareDownloadsPage.typePlaceholder')"
-                >
-                  <el-option
-                    v-for="opt in seriesOptionsForCurrentCategory"
-                    :key="opt.slug"
-                    :label="opt.label"
-                    :value="opt.slug"
-                  />
-                </el-select>
-              </el-form-item>
-            </el-form>
-          </div>
+          <div class="upload-form" />
           <el-upload
             drag
             :auto-upload="false"
@@ -300,33 +251,8 @@ const loading = ref(false)
 const fileList = ref<FileItem[]>([])
 const currentPath = ref('')
 
-interface SeriesTab {
-  key: string
-  label: string
-  slug: string
-  categoryKey?: string
-}
-
-// 系列筛选 & 搜索（自定义类型）
-const seriesTabs = ref<SeriesTab[]>([
-  { key: 'all', label: t('common.all'), slug: 'all' },
-])
-const activeSeries = ref('all')
+// 保留搜索关键词（不再做类型 Tab）
 const searchKeyword = ref('')
-
-// 针对当前大类可选的类型（左侧 Tab 同源）
-const seriesOptionsForCurrentCategory = computed(() =>
-  seriesTabs.value.filter(
-    (t) => t.key !== 'all' && t.categoryKey === activeCategory.value,
-  ),
-)
-
-// 左侧展示用的 Tab 列表（只显示当前大类的类型）
-const visibleSeriesTabs = computed(() =>
-  seriesTabs.value.filter(
-    (t) => t.key === 'all' || t.categoryKey === activeCategory.value,
-  ),
-)
 
 // 文件夹相关状态
 const showCreateFolderDialog = ref(false)
@@ -447,7 +373,6 @@ const handleCategoryClick = (key: string) => {
   if (activeCategory.value === key) return
   activeCategory.value = key
   currentPath.value = ''
-  activeSeries.value = 'all'
   searchKeyword.value = ''
   loadFiles()
 }
@@ -465,52 +390,13 @@ const handleOpen = (item: FileItem) => {
   }
 }
 
-// 名称展示：去掉类型前缀
+// 名称展示：去掉历史上的 [类型] 前缀（如果有）
 const getDisplayName = (item: FileItem): string => {
   const rawName: string = item.name || ''
   if (!rawName) return ''
   const m = rawName.match(/^\[[^\]]+\]\s*(.+)$/)
   return m && m[1] ? m[1] : rawName
 }
-
-// 从名称中提取类型前缀 [Type]
-const extractTypeFromName = (name: string): string | null => {
-  const m = name.match(/^\[(.+?)\]/)
-  return m && m[1] ? m[1] : null
-}
-
-// 从当前路径中推断所属类型（例如根目录下的 [卡莱特] 文件夹内）
-const getCurrentTypeFromPath = (): string | null => {
-  if (!currentPath.value) return null
-  const firstSeg = pathSegments.value[0]
-  if (!firstSeg) return null
-  const m = firstSeg.match(/^\[(.+?)\]/)
-  return m && m[1] ? m[1] : null
-}
-
-// 为当前大类确保一个类型 Tab 存在，并返回用于前缀的 slug
-const ensureTypeForCurrentCategory = (rawLabel: string): string => {
-  const label = rawLabel.trim()
-  const slug = label.replace(/[\\/]/g, '_') // 用于文件名前缀和筛选
-
-  let tab = seriesTabs.value.find(
-    (t) => t.slug === slug && t.categoryKey === activeCategory.value,
-  )
-
-  if (!tab) {
-    tab = {
-      key: slug,
-      label,
-      slug,
-      categoryKey: activeCategory.value,
-    }
-    seriesTabs.value.push(tab)
-  }
-
-  activeSeries.value = tab.key
-  return slug
-}
-
 
 // 创建文件夹
 const handleCreateFolder = async () => {
@@ -520,27 +406,10 @@ const handleCreateFolder = async () => {
   }
   savingFolder.value = true
   try {
-    let folderName = newFolderName.value.trim()
-    let typeSlug = ''
-
-    if (isAtCategoryRoot.value) {
-      // 根目录：根据选择的类型创建/更新 Tab
-      if (selectedSeriesForFolder.value.trim()) {
-        typeSlug = ensureTypeForCurrentCategory(selectedSeriesForFolder.value)
-      }
-    } else {
-      // 子文件夹：从路径中继承类型
-      typeSlug = getCurrentTypeFromPath() || ''
-    }
-
-    if (typeSlug) {
-      folderName = `[${typeSlug}] ${folderName}`
-    }
-
+    const folderName = newFolderName.value.trim()
     await createFolder(driveId.value, fullPath.value, folderName)
     showCreateFolderDialog.value = false
     newFolderName.value = ''
-    selectedSeriesForFolder.value = ''
     await loadFiles()
   } catch (error: any) {
     ElMessage.error(error?.message || t('common.error'))
@@ -621,34 +490,14 @@ const handleUploadSubmit = async () => {
   }
   uploading.value = true
   try {
-    let typeSlug = ''
-
-    if (isAtCategoryRoot.value) {
-      if (selectedSeriesForUpload.value.trim()) {
-        typeSlug = ensureTypeForCurrentCategory(selectedSeriesForUpload.value)
-      }
-    } else {
-      typeSlug = getCurrentTypeFromPath() || ''
-    }
-
     for (const f of uploadFileList.value) {
       if (!f.raw) continue
       let rawFile = f.raw as File
-
-      if (typeSlug) {
-        const originName = rawFile.name
-        const dotIndex = originName.lastIndexOf('.')
-        const ext = dotIndex > -1 ? originName.slice(dotIndex) : ''
-        const base = dotIndex > -1 ? originName.slice(0, dotIndex) : originName
-        const newName = `[${typeSlug}] ${base}${ext}`
-        rawFile = new File([rawFile], newName, { type: rawFile.type })
-      }
 
       await uploadFile(driveId.value, fullPath.value, rawFile)
     }
     uploadFileList.value = []
     showUploadDialog.value = false
-    selectedSeriesForUpload.value = ''
     await loadFiles()
     ElMessage.success(t('files.uploadSuccess'))
   } catch (error: any) {
@@ -661,12 +510,6 @@ const handleUploadSubmit = async () => {
 // 筛选
 const filteredFiles = computed(() => {
   let list = fileList.value
-
-  // 类型筛选（Tab）
-  if (activeSeries.value !== 'all') {
-    const key = activeSeries.value
-    list = list.filter((f) => extractTypeFromName(f.name) === key)
-  }
 
   if (searchKeyword.value.trim()) {
     const kw = searchKeyword.value.toLowerCase()
@@ -999,6 +842,60 @@ onMounted(async () => {
   .empty-state {
     grid-column: 1/-1;
     margin-top: 32px;
+  }
+}
+
+// 软件下载页面的响应式适配
+@media (max-width: 1024px) {
+  .company-files-page {
+    padding: 24px 16px 32px;
+
+    .category-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .company-files-page {
+    padding: 20px 12px 28px;
+
+    .header {
+      margin-bottom: 20px;
+
+      h1 {
+        font-size: 24px;
+      }
+    }
+
+    .category-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    .content-area {
+      padding: 16px 12px 20px;
+      border-radius: 20px;
+    }
+
+    .content-nav {
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 12px;
+
+      .nav-right {
+        width: 100%;
+
+        .search-input {
+          width: 100%;
+        }
+      }
+    }
+
+    .file-grid {
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px;
+    }
   }
 }
 </style>

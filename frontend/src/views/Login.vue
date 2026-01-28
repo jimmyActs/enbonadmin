@@ -1,5 +1,5 @@
 <template>
-  <div class="login-container">
+  <div class="login-container" :style="loginBgStyle">
     <div class="login-box">
       <div class="login-header">
         <img src="/logo.png" alt="logo" class="logo" />
@@ -60,6 +60,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage, ElForm } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
+import loginBg from '../../loginbg.webp'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -78,6 +79,11 @@ const loginForm = reactive({
 const loginRules = computed(() => ({
   username: [{ required: true, message: t('login.usernameRequired'), trigger: 'blur' }],
   password: [{ required: true, message: t('login.passwordRequired'), trigger: 'blur' }]
+}))
+
+// 登录页背景图样式
+const loginBgStyle = computed(() => ({
+  backgroundImage: `url(${loginBg})`,
 }))
 
 // 从本地读取上次登录信息（记住我）
@@ -143,14 +149,20 @@ const handleLogin = async () => {
 <style scoped lang="scss">
 .login-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-color: #4f46e5;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 40px 24px;
+  box-sizing: border-box;
 }
 
 .login-box {
-  width: 420px;
+  width: 100%;
+  max-width: 420px;
   padding: 40px;
   background: #fff;
   border-radius: 12px;
@@ -183,6 +195,36 @@ const handleLogin = async () => {
     .login-button {
       width: 100%;
       margin-top: 10px;
+    }
+  }
+}
+
+@media (max-width: 768px) {
+  .login-container {
+    padding: 24px 16px;
+    align-items: flex-start;
+  }
+
+  .login-box {
+    padding: 24px 18px 28px;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+    .login-header {
+      margin-bottom: 24px;
+
+      .logo {
+        height: 52px;
+        margin-bottom: 12px;
+      }
+
+      h1 {
+        font-size: 20px;
+      }
+
+      .subtitle {
+        font-size: 13px;
+      }
     }
   }
 }

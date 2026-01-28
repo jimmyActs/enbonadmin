@@ -303,6 +303,58 @@ const handleClose = () => {
     border-radius: 10px;
     box-shadow: 0 6px 16px rgba(0,122,255,0.25);
   }
+
+  // 平板和手机端：对话框与表单的响应式适配
+  @media (max-width: 1024px) {
+    :deep(.el-dialog) {
+      width: 90vw !important;
+      max-width: 640px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    :deep(.el-dialog) {
+      width: 100vw !important;
+      max-width: 100vw;
+      margin: 0;
+      border-radius: 0;
+    }
+
+    .dialog-header {
+      align-items: flex-start;
+      padding: 4px 4px 12px 4px;
+
+      .title {
+        font-size: 16px;
+      }
+
+      .subtitle {
+        font-size: 11px;
+      }
+    }
+
+    .form-grid {
+      grid-template-columns: 1fr;
+      gap: 10px 12px;
+
+      .quantity-item .quantity-row {
+        flex-direction: column;
+        align-items: flex-start;
+
+        .unit-select {
+          width: 100%;
+        }
+      }
+    }
+
+    :deep(.el-form-item) {
+      margin-bottom: 10px;
+    }
+
+    :deep(.el-form-item__label) {
+      padding-bottom: 4px;
+    }
+  }
 }
 </style>
 

@@ -1164,6 +1164,75 @@ const removeAlbumPhoto = (index: number) => {
   }
 }
 
+// 公司文化页面响应式适配：平板 / 手机上下布局
+@media (max-width: 1024px) {
+  .culture-container {
+    padding: 20px 16px 32px;
+  }
+
+  .hero-section {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+
+    .hero-right {
+      align-self: stretch;
+
+      .logo-box {
+        width: 100%;
+        border-radius: 28px;
+      }
+    }
+  }
+
+  .bento-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .culture-container {
+    padding: 16px 12px 28px;
+  }
+
+  .hero-section {
+    padding: 20px 0 24px;
+
+    .hero-left {
+      .brand-pills {
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+    }
+
+    .hero-right {
+      width: 100%;
+
+      .logo-box {
+        height: 130px;
+      }
+    }
+  }
+
+  .action-bar {
+    flex-direction: column;
+    align-items: stretch;
+
+    .search-input {
+      width: 100%;
+    }
+  }
+
+  .bento-grid {
+    grid-template-columns: 1fr;
+    grid-auto-rows: 200px;
+  }
+}
+
 .preview-subtitle {
   margin-bottom: 12px;
   color: #6b7280;

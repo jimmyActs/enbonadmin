@@ -767,6 +767,36 @@ const translateWithAI = () => {
   flex-wrap: wrap;
 }
 
+// 平板 / 手机端：工具区弹窗的响应式布局
+@media (max-width: 1024px) {
+  .toolbox-layout {
+    grid-template-columns: 190px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .toolbox-dialog {
+    :deep(.el-dialog__body) {
+      padding: 14px 12px 16px;
+    }
+  }
+
+  .toolbox-layout {
+    grid-template-columns: 1fr;
+    row-gap: 14px;
+  }
+
+  .tool-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .tool-card {
+    flex: 1 1 calc(50% - 8px);
+  }
+}
+
 @media (max-width: 980px) {
   .calc-layout {
     grid-template-columns: 1fr;

@@ -3156,6 +3156,35 @@ onBeforeUnmount(() => {
     }
   }
 
+  // 小屏下的大 Banner：贴底显示文案卡片，减少内边距
+  @media (max-width: 768px) {
+    .motivation-banner {
+      min-height: 360px;
+      height: 70vh;
+      border-radius: 16px;
+      margin-bottom: 24px;
+
+      .banner-content {
+        padding: 0 16px 18px;
+
+        .motivation-content {
+          max-width: 100%;
+          padding: 16px 14px;
+          border-radius: 14px;
+        }
+
+        .motivation-text {
+          font-size: 18px;
+          line-height: 1.5;
+        }
+
+        .motivation-author {
+          font-size: 14px;
+        }
+      }
+    }
+  }
+
   // 编辑对话框样式 - 现代简约扁平
   :deep(.edit-banner-dialog) {
     .el-dialog {

@@ -20,6 +20,7 @@ import { DailyWorksModule } from './modules/daily-works/daily-works.module'; // 
 import { CompanyFilesModule } from './modules/company-files/company-files.module'; // 导入公司文件配置模块
 import { SoftwareDownloadsModule } from './modules/software-downloads/software-downloads.module'; // 导入软件下载元数据模块
 import { WorkspaceStorageModule } from './modules/workspace-storage/workspace-storage.module';
+import { OnlineStatusModule } from './modules/online-status/online-status.module';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { WorkspaceStorageModule } from './modules/workspace-storage/workspace-st
     CompanyFilesModule, // 公司文件分类/系列配置模块
     SoftwareDownloadsModule, // 软件下载元数据模块
     WorkspaceStorageModule,
+    OnlineStatusModule,
   ],
   controllers: [AppController],
   providers: [AppService],

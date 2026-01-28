@@ -510,6 +510,7 @@ import { createReminder, type CreateReminderDto } from '../api/reminders'
 import { getAvatarUrl as getEmployeeAvatarUrl } from '../api/users'
 import { useUserStore } from '../store/user'
 import { useEmployeeDisplayName } from '../utils/employee'
+import { getOnlineUserIds } from '../api/online'
 
 const { t, locale } = useI18n()
 const userStore = useUserStore()
@@ -519,6 +520,8 @@ const loading = ref(false)
 const submitting = ref(false)
 const groupedEmployees = ref<Record<string, Employee[]>>({})
 const statistics = ref<any>(null)
+// 后端返回的当前在线用户ID列表
+const onlineUserIds = ref<number[]>([])
 // 搜索关键字（按姓名或部门名优先展示匹配的大卡片）
 const searchKeyword = ref('')
 const showReminderDialog = ref(false)
@@ -757,17 +760,12 @@ const getWorkStatusText = (status: string): string => {
 }
 
 const isEmployeeOnline = (employee: Employee): boolean => {
-  // 1）优先根据最近登录时间判断（只要最近一段时间内登录过后台，就算“在线”）
-  if (employee.lastLoginAt) {
-    const last = new Date(employee.lastLoginAt).getTime()
-    // 和后端统计逻辑保持一致：最近 15 分钟内登录算在线
-    const threshold = Date.now() - 15 * 60 * 1000
-    if (last >= threshold) {
-      return true
-    }
+  // 升级版：优先使用后端在线列表判断
+  if (onlineUserIds.value.includes(employee.id)) {
+    return true
   }
 
-  // 2）如果没有登录时间，或者超过阈值，则退回到工作状态字段
+  // 兼容旧逻辑：如果后端暂时没有记录，则根据工作状态兜底
   const status = getEffectiveWorkStatus(employee)
   return status !== 'offline'
 }
@@ -913,12 +911,14 @@ const getOnlineCount = (): number => {
 const loadData = async () => {
   loading.value = true
   try {
-    const [grouped, stats] = await Promise.all([
+    const [grouped, stats, online] = await Promise.all([
       getEmployeesGrouped(),
       getEmployeeStatistics(),
+      getOnlineUserIds(),
     ])
     groupedEmployees.value = grouped
     statistics.value = stats
+    onlineUserIds.value = online.userIds || []
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))
   } finally {
@@ -1798,6 +1798,8 @@ onBeforeUnmount(() => {
 
       .department-card {
         .employees-list {
+          grid-template-columns: 1fr;
+
           .employee-item {
             flex-direction: column;
             align-items: flex-start;

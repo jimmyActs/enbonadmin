@@ -888,6 +888,58 @@ onBeforeUnmount(() => {
       letter-spacing: -0.01em;
     }
   }
+
+  // 平板 / 手机端响应式
+  @media (max-width: 1200px) {
+    :deep(.el-dialog) {
+      width: 90vw !important;
+      max-width: 880px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    :deep(.el-dialog) {
+      width: 100vw !important;
+      max-width: 100vw;
+      margin: 0;
+      border-radius: 0;
+    }
+
+    .meeting-rooms-status {
+      .rooms-grid {
+        grid-template-columns: 1fr;
+
+        .room-card {
+          .room-image-wrapper {
+            height: 160px;
+          }
+        }
+      }
+    }
+
+    .booking-tabs {
+      :deep(.el-tabs__header) {
+        padding: 0 4px;
+      }
+    }
+
+    .booking-form {
+      :deep(.el-form-item) {
+        margin-bottom: 12px;
+      }
+    }
+
+    .booking-records {
+      :deep(.el-table) {
+        width: 100%;
+      }
+
+      // 让表格在小屏可横向滚动
+      :deep(.el-table__body-wrapper) {
+        overflow-x: auto;
+      }
+    }
+  }
 }
 </style>
 

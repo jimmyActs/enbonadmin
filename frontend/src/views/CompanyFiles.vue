@@ -41,20 +41,6 @@
             >
               返回上一级
             </el-button>
-            <div
-              v-if="isAtCategoryRoot"
-              class="series-tabs"
-            >
-            <div
-                v-for="tab in visibleSeriesTabs"
-                :key="tab.key"
-                class="s-tab"
-                :class="{ active: activeSeries === tab.key }"
-                @click="activeSeries = tab.key"
-              >
-                {{ tab.label }}
-              </div>
-            </div>
           </div>
 
           <div class="nav-right">
@@ -199,22 +185,6 @@
         :close-on-click-modal="false"
       >
         <el-form label-position="top">
-          <el-form-item v-if="isAtCategoryRoot" label="类型 / Type">
-            <el-select
-              v-model="selectedSeriesForFolder"
-              filterable
-              allow-create
-              default-first-option
-              placeholder="选择或输入类型，例如：日更素材 / 海外 / 电商主图"
-            >
-              <el-option
-                v-for="opt in seriesOptionsForCurrentCategory"
-                :key="opt.slug"
-                :label="opt.label"
-                :value="opt.slug"
-              />
-            </el-select>
-          </el-form-item>
           <el-form-item label="文件夹名称">
             <el-input
               v-model="newFolderName"
@@ -237,26 +207,7 @@
         width="460px"
         :close-on-click-modal="false"
       >
-        <div class="upload-form">
-          <el-form label-position="top">
-            <el-form-item v-if="isAtCategoryRoot" label="类型 / Type">
-              <el-select
-                v-model="selectedSeriesForUpload"
-                filterable
-                allow-create
-                default-first-option
-                placeholder="选择或输入类型，例如：日更素材 / 海外 / 电商主图"
-              >
-                <el-option
-                  v-for="opt in seriesOptionsForCurrentCategory"
-                  :key="opt.slug"
-                  :label="opt.label"
-                  :value="opt.slug"
-                />
-              </el-select>
-            </el-form-item>
-          </el-form>
-        </div>
+        <div class="upload-form" />
         <el-upload
           drag
           :auto-upload="false"
@@ -355,24 +306,10 @@ interface SeriesTab {
   categoryKey?: string
 }
 
-// 系列筛选 & 搜索
+// 系列筛选 & 搜索（目前不再在界面展示类型 Tab，但保留内部结构，以兼容历史带 [类型] 前缀的文件夹）
 const seriesTabs = ref<SeriesTab[]>([])
 const activeSeries = ref('all')
 const searchKeyword = ref('')
-
-// 针对当前大类可选的类型（左侧 Tab 同源）
-const seriesOptionsForCurrentCategory = computed(() =>
-  seriesTabs.value.filter(
-    (t) => t.key !== 'all' && t.categoryKey === activeCategory.value,
-  ),
-)
-
-// 左侧展示用的 Tab 列表（只显示当前大类的类型）
-const visibleSeriesTabs = computed(() =>
-  seriesTabs.value.filter(
-    (t) => t.key === 'all' || t.categoryKey === activeCategory.value,
-  ),
-)
 
 // 文件夹相关状态
 const showCreateFolderDialog = ref(false)

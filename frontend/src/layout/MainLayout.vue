@@ -1,7 +1,11 @@
 <template>
-  <el-container class="layout-container">
+  <el-container class="layout-container" :class="{ 'is-mobile': isMobile }">
     <!-- 侧边栏 -->
-    <el-aside :width="isCollapse ? '64px' : '240px'" class="aside-container">
+    <el-aside
+      :width="isCollapse ? '64px' : '240px'"
+      class="aside-container"
+      :class="{ 'is-collapsed': isCollapse, 'is-open': !isCollapse }"
+    >
       <div class="logo">
         <span v-if="!isCollapse">{{ $t('layout.appName') }}</span>
       </div>
@@ -120,11 +124,18 @@
         </router-view>
       </el-main>
     </el-container>
+
+    <!-- 移动端侧边栏遮罩层 -->
+    <div
+      v-if="isMobile && !isCollapse"
+      class="sidebar-overlay"
+      @click="toggleCollapse"
+    />
   </el-container>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import {
@@ -153,6 +164,7 @@ import {
   canAccessSales,
   canAccessHR
 } from '../utils/permissions'
+import { sendHeartbeat } from '../api/online'
 
 const router = useRouter()
 const route = useRoute()
@@ -160,6 +172,7 @@ const userStore = useUserStore()
 const { t } = useI18n()
 
 const isCollapse = ref(false)
+const isMobile = ref(false)
 
 const activeMenu = computed(() => route.path)
 const userName = computed(() => userStore.userName)
@@ -192,6 +205,8 @@ const canAccessHRComputed = computed(() => {
 // 是否为超级管理员账号（拥有权限管理中心入口）
 const isSuperAdmin = computed(() => userStore.userInfo?.role === 'super_admin')
 
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+
 const toggleCollapse = () => {
   isCollapse.value = !isCollapse.value
 }
@@ -206,12 +221,21 @@ const handleCommand = (command: string) => {
   }
 }
 
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+let resizeHandler: (() => void) | null = null
+
 // 预加载常用页面 chunk（避免首次切换“等加载”的卡顿感）
 onMounted(() => {
-  // 小屏设备默认折叠侧边栏，避免手机端内容被压缩太窄
-  if (window.innerWidth <= 768) {
-    isCollapse.value = true
+  const handleResize = () => {
+    isMobile.value = window.innerWidth <= 768
+    if (isMobile.value) {
+      // 移动端默认折叠侧边栏，避免内容区被压缩太窄
+      isCollapse.value = true
+    }
   }
+  handleResize()
+  window.addEventListener('resize', handleResize)
+  resizeHandler = handleResize
 
   const preload = () => {
     void import('../views/Index.vue')
@@ -226,6 +250,28 @@ onMounted(() => {
   const ric = (window as any).requestIdleCallback as undefined | ((cb: () => void, opts?: { timeout?: number }) => void)
   if (ric) ric(preload, { timeout: 1500 })
   else setTimeout(preload, 800)
+
+  // 启动在线心跳：进入主布局后，每 60 秒上报一次“我在线”
+  const send = () => {
+    if (!userStore.isLoggedIn) return
+    void sendHeartbeat().catch(() => {
+      // 心跳失败通常是网络抖动或登录过期，这里静默处理
+    })
+  }
+
+  send()
+  heartbeatTimer = setInterval(send, 60 * 1000)
+})
+
+onBeforeUnmount(() => {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+  if (resizeHandler) {
+    window.removeEventListener('resize', resizeHandler)
+    resizeHandler = null
+  }
 })
 </script>
 
@@ -326,6 +372,45 @@ onMounted(() => {
   padding: 22px;
   overflow-y: auto;
   position: relative;
+}
+
+// 小屏幕下的侧边栏抽屉样式
+@media (max-width: 768px) {
+  .layout-container.is-mobile {
+    flex-direction: column;
+
+    .aside-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      z-index: 2000;
+      width: 240px !important;
+      transform: translateX(-100%);
+      box-shadow: 4px 0 16px rgba(0, 0, 0, 0.18);
+      border-right: none;
+      background: #ffffff;
+    }
+
+    .aside-container.is-open {
+      transform: translateX(0);
+    }
+
+    .header-container {
+      padding: 0 12px;
+    }
+
+    .main-container {
+      padding: 16px 12px 20px;
+    }
+
+    .sidebar-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.35);
+      z-index: 1990;
+    }
+  }
 }
 </style>
 
