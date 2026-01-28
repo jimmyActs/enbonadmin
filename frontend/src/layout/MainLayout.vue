@@ -221,7 +221,6 @@ const handleCommand = (command: string) => {
   }
 }
 
-let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let resizeHandler: (() => void) | null = null
 
 // 预加载常用页面 chunk（避免首次切换“等加载”的卡顿感）
