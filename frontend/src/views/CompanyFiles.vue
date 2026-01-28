@@ -283,7 +283,7 @@
         width="480px"
         :close-on-click-modal="false"
       >
-        <el-form label-position="top">
+        <el-form :model="aiLinkForm" label-position="top">
           <el-form-item label="标题 / 平台名称">
             <el-input v-model="aiLinkForm.title" placeholder="例如：Midjourney / OpenAI / Stable Diffusion" />
           </el-form-item>
