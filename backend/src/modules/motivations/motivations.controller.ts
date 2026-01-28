@@ -204,7 +204,7 @@ export class MotivationsController {
    */
   @Post('culture-images/upload')
   @UseInterceptors(FileInterceptor('file'))
-  @RequirePermissions('hr.banner.manage')
+  @RequirePermissions('workspace.companyFiles.manage')
   async uploadCultureImage(
     @UploadedFile(
       new ParseFilePipe({

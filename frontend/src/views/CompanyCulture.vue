@@ -468,6 +468,21 @@ import {
 } from '@element-plus/icons-vue'
 import { getApiBaseURL } from '../api/config'
 import { useUserStore } from '../store/user'
+import {
+  getCultureHero,
+  saveCultureHero,
+  getCultureMembers,
+  createCultureMember,
+  updateCultureMember,
+  deleteCultureMember,
+  getCultureAlbums,
+  createCultureAlbum,
+  updateCultureAlbum,
+  deleteCultureAlbum,
+  type Album as ApiAlbum,
+  type Member as ApiMember,
+  type HeroInfo as ApiHeroInfo,
+} from '../api/company-culture'
 
 const { t } = useI18n()
 const userStore = useUserStore()
@@ -503,6 +518,7 @@ interface Member {
   title: string
   tag: string
   avatar: string
+  sortOrder?: number
 }
 
 type AlbumCategoryKey = 'annual' | 'tea' | 'team' | 'festival' | 'daily' | 'event'
@@ -526,7 +542,7 @@ interface Album {
   photos: AlbumPhoto[]
 }
 
-// 顶部公司文化信息（先本地状态，后续可接后端）
+// 顶部公司文化信息（从后端加载，带默认值兜底）
 const hero = ref<HeroInfo>({
   title: 'Our Culture',
   subtitle: '我们用更聪明的工具，帮助团队连接全球贸易。',
@@ -540,10 +556,25 @@ const hero = ref<HeroInfo>({
 const showHeroDialog = ref(false)
 const heroForm = ref<HeroInfo>({ ...hero.value })
 
-const saveHero = () => {
-  hero.value = { ...heroForm.value }
-  showHeroDialog.value = false
-  ElMessage.success(t('common.saveSuccess'))
+const saveHero = async () => {
+  try {
+    const payload: Partial<ApiHeroInfo> = { ...heroForm.value }
+    const saved = await saveCultureHero(payload)
+    hero.value = {
+      title: saved.title ?? heroForm.value.title,
+      subtitle: saved.subtitle ?? heroForm.value.subtitle,
+      vision: saved.vision ?? heroForm.value.vision,
+      values: saved.values ?? heroForm.value.values,
+      slogan: saved.slogan ?? heroForm.value.slogan,
+      logoText: saved.logoText ?? heroForm.value.logoText,
+      logoImage: saved.logoImage ?? heroForm.value.logoImage,
+    }
+    heroForm.value = { ...hero.value }
+    showHeroDialog.value = false
+    ElMessage.success(t('common.saveSuccess'))
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  }
 }
 
 // 图片上传配置（公司文化 logo / 头像 / 相册共用）
@@ -569,30 +600,8 @@ const beforeImageUpload: UploadProps['beforeUpload'] = (file) => {
   return true
 }
 
-// 核心团队成员（示例数据）
-const members = ref<Member[]>([
-  {
-    id: 1,
-    name: 'David Zhang',
-    title: '创始人 / 首席执行官',
-    tag: 'CEO',
-    avatar: 'https://i.pravatar.cc/150?u=a1'
-  },
-  {
-    id: 2,
-    name: 'Marcus He',
-    title: '首席技术官',
-    tag: 'TECH',
-    avatar: 'https://i.pravatar.cc/150?u=a2'
-  },
-  {
-    id: 3,
-    name: 'Elena Sun',
-    title: '首席运营官',
-    tag: 'OPS',
-    avatar: 'https://i.pravatar.cc/150?u=a3'
-  }
-])
+// 核心团队成员（从后端加载）
+const members = ref<Member[]>([])
 
 const showMemberDialog = ref(false)
 const currentMember = ref<Member | null>(null)
@@ -621,22 +630,55 @@ const openMemberDialog = (member?: Member) => {
   showMemberDialog.value = true
 }
 
-const saveMember = () => {
+const saveMember = async () => {
   if (!memberForm.value.name.trim()) {
     ElMessage.warning(t('workspace.companyCulturePage.memberNameRequired'))
     return
   }
-  if (currentMember.value) {
-    const idx = members.value.findIndex(m => m.id === currentMember.value?.id)
-    if (idx !== -1) {
-      members.value[idx] = { ...memberForm.value }
+  try {
+    if (currentMember.value) {
+      const payload: Partial<ApiMember> = {
+        name: memberForm.value.name,
+        title: memberForm.value.title,
+        tag: memberForm.value.tag,
+        avatar: memberForm.value.avatar,
+        sortOrder: currentMember.value.sortOrder,
+      }
+      const updated = await updateCultureMember(currentMember.value.id, payload)
+      const idx = members.value.findIndex(m => m.id === currentMember.value?.id)
+      if (idx !== -1) {
+        members.value[idx] = {
+          id: updated.id,
+          name: updated.name,
+          title: updated.title || '',
+          tag: updated.tag || '',
+          avatar: updated.avatar || '',
+          sortOrder: updated.sortOrder,
+        }
+      }
+    } else {
+      const payload: Omit<ApiMember, 'id'> = {
+        name: memberForm.value.name,
+        title: memberForm.value.title,
+        tag: memberForm.value.tag,
+        avatar: memberForm.value.avatar,
+        sortOrder: members.value.length ? (members.value[members.value.length - 1].sortOrder || 0) + 10 : 10,
+      }
+      const created = await createCultureMember(payload)
+      members.value.push({
+        id: created.id,
+        name: created.name,
+        title: created.title || '',
+        tag: created.tag || '',
+        avatar: created.avatar || '',
+        sortOrder: created.sortOrder,
+      })
     }
-  } else {
-    const newId = Date.now()
-    members.value.push({ ...memberForm.value, id: newId })
+    showMemberDialog.value = false
+    ElMessage.success(t('common.saveSuccess'))
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
   }
-  showMemberDialog.value = false
-  ElMessage.success(t('common.saveSuccess'))
 }
 
 const handleDeleteMember = async (member: Member) => {
@@ -646,6 +688,7 @@ const handleDeleteMember = async (member: Member) => {
       t('common.warning'),
       { type: 'warning' }
     )
+    await deleteCultureMember(member.id)
     members.value = members.value.filter(m => m.id !== member.id)
     ElMessage.success(t('common.deleteSuccess'))
   } catch (error: any) {
@@ -666,7 +709,7 @@ const categories = [
 ]
 
 // 示例相册
-// 相册列表（初始为空，由用户创建）
+// 相册列表（从后端加载，由用户创建）
 const albums = ref<Album[]>([])
 
 const searchKeyword = ref('')
@@ -739,22 +782,78 @@ const openAlbumDialog = (album?: Album) => {
   showAlbumDialog.value = true
 }
 
-const saveAlbum = () => {
+const saveAlbum = async () => {
   if (!albumForm.value.title.trim()) {
     ElMessage.warning(t('workspace.companyCulturePage.albumTitleRequired'))
     return
   }
-  if (currentAlbum.value) {
-    const idx = albums.value.findIndex(a => a.id === currentAlbum.value?.id)
-    if (idx !== -1) {
-      albums.value[idx] = normalizeAlbumBeforeSave({ ...albumForm.value })
+
+  const normalized = normalizeAlbumBeforeSave({ ...albumForm.value })
+
+  try {
+    if (currentAlbum.value) {
+      const payload: Partial<ApiAlbum> = {
+        title: normalized.title,
+        subtitle: normalized.subtitle,
+        category: normalized.category,
+        tag: normalized.tag,
+        pinned: normalized.pinned,
+        hidden: normalized.hidden,
+        layout: normalized.layout,
+        sizeClass: normalized.sizeClass,
+        coverImage: normalized.coverImage,
+        photos: normalized.photos,
+      }
+      const updated = await updateCultureAlbum(currentAlbum.value.id, payload)
+      const idx = albums.value.findIndex(a => a.id === currentAlbum.value?.id)
+      if (idx !== -1) {
+        albums.value[idx] = {
+          id: updated.id,
+          title: updated.title,
+          subtitle: updated.subtitle || '',
+          category: (updated.category as AlbumCategoryKey) || 'event',
+          tag: updated.tag || '',
+          pinned: updated.pinned,
+          hidden: updated.hidden,
+          layout: (updated.layout as any) || 'standard',
+          sizeClass: (updated.sizeClass as any) || '',
+          coverImage: updated.coverImage || '',
+          photos: updated.photos || [],
+        }
+      }
+    } else {
+      const payload: Omit<ApiAlbum, 'id'> = {
+        title: normalized.title,
+        subtitle: normalized.subtitle,
+        category: normalized.category,
+        tag: normalized.tag,
+        pinned: normalized.pinned,
+        hidden: normalized.hidden,
+        layout: normalized.layout,
+        sizeClass: normalized.sizeClass,
+        coverImage: normalized.coverImage,
+        photos: normalized.photos,
+      }
+      const created = await createCultureAlbum(payload)
+      albums.value.push({
+        id: created.id,
+        title: created.title,
+        subtitle: created.subtitle || '',
+        category: (created.category as AlbumCategoryKey) || 'event',
+        tag: created.tag || '',
+        pinned: created.pinned,
+        hidden: created.hidden,
+        layout: (created.layout as any) || 'standard',
+        sizeClass: (created.sizeClass as any) || '',
+        coverImage: created.coverImage || '',
+        photos: created.photos || [],
+      })
     }
-  } else {
-    const newId = Date.now()
-    albums.value.push(normalizeAlbumBeforeSave({ ...albumForm.value, id: newId }))
+    showAlbumDialog.value = false
+    ElMessage.success(t('common.saveSuccess'))
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
   }
-  showAlbumDialog.value = false
-  ElMessage.success(t('common.saveSuccess'))
 }
 
 // 根据布局选项规范 sizeClass 等字段
@@ -789,6 +888,7 @@ const deleteCurrentAlbum = async () => {
       t('common.warning'),
       { type: 'warning' }
     )
+    await deleteCultureAlbum(previewAlbum.value.id)
     albums.value = albums.value.filter(a => a.id !== previewAlbum.value?.id)
     showPreviewDialog.value = false
     ElMessage.success(t('common.deleteSuccess'))
@@ -799,14 +899,24 @@ const deleteCurrentAlbum = async () => {
   }
 }
 
-const togglePinCurrentAlbum = () => {
+const togglePinCurrentAlbum = async () => {
   if (!previewAlbum.value) return
   previewAlbum.value.pinned = !previewAlbum.value.pinned
+  try {
+    await updateCultureAlbum(previewAlbum.value.id, { pinned: previewAlbum.value.pinned })
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  }
 }
 
-const toggleHiddenCurrentAlbum = () => {
+const toggleHiddenCurrentAlbum = async () => {
   if (!previewAlbum.value) return
   previewAlbum.value.hidden = !previewAlbum.value.hidden
+  try {
+    await updateCultureAlbum(previewAlbum.value.id, { hidden: previewAlbum.value.hidden })
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  }
 }
 
 // 双击查看原图：在新标签页打开当前图片
@@ -869,6 +979,55 @@ const handleAlbumPhotoUploadSuccess = (response: any) => {
 const removeAlbumPhoto = (index: number) => {
   albumForm.value.photos.splice(index, 1)
 }
+
+// 初始化：从后端加载公司文化数据
+onMounted(async () => {
+  try {
+    const [heroData, membersData, albumsData] = await Promise.all([
+      getCultureHero(),
+      getCultureMembers(),
+      getCultureAlbums(),
+    ])
+
+    if (heroData) {
+      hero.value = {
+        title: heroData.title || hero.value.title,
+        subtitle: heroData.subtitle || hero.value.subtitle,
+        vision: heroData.vision || hero.value.vision,
+        values: heroData.values || hero.value.values,
+        slogan: heroData.slogan || hero.value.slogan,
+        logoText: heroData.logoText || hero.value.logoText,
+        logoImage: heroData.logoImage || hero.value.logoImage,
+      }
+      heroForm.value = { ...hero.value }
+    }
+
+    members.value = (membersData || []).map((m: ApiMember) => ({
+      id: m.id,
+      name: m.name,
+      title: m.title || '',
+      tag: m.tag || '',
+      avatar: m.avatar || '',
+      sortOrder: m.sortOrder,
+    }))
+
+    albums.value = (albumsData || []).map((a: ApiAlbum) => ({
+      id: a.id,
+      title: a.title,
+      subtitle: a.subtitle || '',
+      category: (a.category as AlbumCategoryKey) || 'event',
+      tag: a.tag || '',
+      pinned: a.pinned,
+      hidden: a.hidden,
+      layout: (a.layout as any) || 'standard',
+      sizeClass: (a.sizeClass as any) || '',
+      coverImage: a.coverImage || '',
+      photos: a.photos || [],
+    }))
+  } catch (error: any) {
+    console.error('加载公司文化数据失败', error)
+  }
+})
 </script>
 
 <style scoped lang="scss">

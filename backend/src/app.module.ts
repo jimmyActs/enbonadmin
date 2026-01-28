@@ -21,6 +21,7 @@ import { CompanyFilesModule } from './modules/company-files/company-files.module
 import { SoftwareDownloadsModule } from './modules/software-downloads/software-downloads.module'; // 导入软件下载元数据模块
 import { WorkspaceStorageModule } from './modules/workspace-storage/workspace-storage.module';
 import { OnlineStatusModule } from './modules/online-status/online-status.module';
+import { CompanyCultureModule } from './modules/company-culture/company-culture.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { OnlineStatusModule } from './modules/online-status/online-status.module
     SoftwareDownloadsModule, // 软件下载元数据模块
     WorkspaceStorageModule,
     OnlineStatusModule,
+    CompanyCultureModule,
   ],
   controllers: [AppController],
   providers: [AppService],

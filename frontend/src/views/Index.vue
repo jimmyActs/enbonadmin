@@ -690,7 +690,7 @@
     <!-- 通知和待办 -->
     <div class="bottom-section fade-in-delay-6">
       <el-row :gutter="20">
-        <el-col :span="12">
+        <el-col :span="12" :xs="24">
           <el-card class="notice-card">
             <template #header>
               <div class="card-header">
@@ -714,7 +714,7 @@
           </el-card>
         </el-col>
 
-        <el-col :span="12">
+        <el-col :span="12" :xs="24">
           <el-card class="todo-card fade-in-delay-7">
             <template #header>
               <div class="card-header">
@@ -736,7 +736,7 @@
     <!-- 公司通告和新闻 -->
     <div class="news-section fade-in-delay-8">
       <el-row :gutter="20">
-        <el-col :span="12">
+        <el-col :span="12" :xs="24">
           <el-card class="news-card">
             <template #header>
               <div class="card-header">
@@ -761,7 +761,7 @@
           </el-card>
         </el-col>
 
-        <el-col :span="12">
+        <el-col :span="12" :xs="24">
           <el-card class="news-card">
             <template #header>
               <div class="card-header">
