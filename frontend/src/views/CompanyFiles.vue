@@ -655,10 +655,12 @@ const loadFiles = async () => {
     })
     fileList.value = list || []
 
-    // 如果是在 AI 资产库分类下，同时加载 AI 链接列表
+    // 如果是在 AI 资产库分类下，同时加载当前文件夹下的 AI 链接列表
     if (activeCategory.value === 'ai-assets') {
       try {
-        aiLinks.value = await getAiLinks()
+        // 使用当前路径作为 AI 链接的「所属文件夹」，根目录传空字符串
+        const folderPath = currentPath.value || ''
+        aiLinks.value = await getAiLinks(folderPath)
       } catch (e) {
         console.error('加载 AI 链接失败', e)
       }
@@ -908,6 +910,8 @@ const saveAiLink = async () => {
   }
 
   try {
+    const folderPath = currentPath.value || ''
+
     if (editingLink.value) {
       const updated = await updateAiLink(editingLink.value.id, {
         title: aiLinkForm.value.title,
@@ -916,6 +920,7 @@ const saveAiLink = async () => {
         account: aiLinkForm.value.account || undefined,
         password: aiLinkForm.value.password || undefined,
         notes: aiLinkForm.value.notes || undefined,
+        folderPath,
       })
       const idx = aiLinks.value.findIndex((l) => l.id === editingLink.value?.id)
       if (idx !== -1) {
@@ -930,6 +935,7 @@ const saveAiLink = async () => {
         account: aiLinkForm.value.account || undefined,
         password: aiLinkForm.value.password || undefined,
         notes: aiLinkForm.value.notes || undefined,
+        folderPath,
       })
       aiLinks.value.push(created)
     }

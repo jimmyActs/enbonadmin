@@ -9,10 +9,13 @@ export interface AiLink {
   password?: string;
   notes?: string;
   sortOrder?: number;
+  folderPath?: string | null;
 }
 
-export const getAiLinks = (): Promise<AiLink[]> => {
-  return api.get('/ai-links');
+export const getAiLinks = (folderPath?: string): Promise<AiLink[]> => {
+  return api.get('/ai-links', {
+    params: folderPath ? { folderPath } : undefined,
+  });
 };
 
 export const createAiLink = (data: Omit<AiLink, 'id'>): Promise<AiLink> => {

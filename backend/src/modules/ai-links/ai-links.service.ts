@@ -11,8 +11,17 @@ export class AiLinksService {
     private readonly aiLinkRepo: Repository<AiLink>,
   ) {}
 
-  async findAll(): Promise<AiLink[]> {
+  async findAll(folderPath?: string | null): Promise<AiLink[]> {
+    const where: any = {};
+    // 根目录下的链接用 NULL 存储
+    if (!folderPath) {
+      where.folderPath = null;
+    } else {
+      where.folderPath = folderPath;
+    }
+
     return this.aiLinkRepo.find({
+      where,
       order: { sortOrder: 'ASC', id: 'ASC' },
     });
   }
@@ -34,6 +43,7 @@ export class AiLinksService {
       account: dto.account ?? null,
       password: dto.password ?? null,
       notes: dto.notes ?? null,
+      folderPath: dto.folderPath ?? null,
       sortOrder,
     });
     return this.aiLinkRepo.save(entity);
@@ -52,6 +62,10 @@ export class AiLinksService {
       password: dto.password ?? link.password,
       notes: dto.notes ?? link.notes,
       sortOrder: dto.sortOrder ?? link.sortOrder,
+      folderPath:
+        dto.folderPath !== undefined
+          ? dto.folderPath ?? null
+          : link.folderPath,
     });
 
     return this.aiLinkRepo.save(link);

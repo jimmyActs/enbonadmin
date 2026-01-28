@@ -9,6 +9,7 @@ import {
   ParseIntPipe,
   UseGuards,
   Req,
+  Query,
 } from '@nestjs/common';
 import { AiLinksService } from './ai-links.service';
 import { CreateAiLinkDto, UpdateAiLinkDto } from './dto/ai-link.dto';
@@ -46,12 +47,12 @@ export class AiLinksController {
   }
 
   @Get()
-  async findAll(@Req() req: any) {
+  async findAll(@Req() req: any, @Query('folderPath') folderPath?: string) {
     const allowed = await this.isBrandDepartmentUser(req);
     if (!allowed) {
       return [];
     }
-    return this.aiLinksService.findAll();
+    return this.aiLinksService.findAll(folderPath ?? null);
   }
 
   @Post()

@@ -31,6 +31,12 @@ export class CreateAiLinkDto {
   @IsOptional()
   @IsInt()
   sortOrder?: number;
+
+  // 所属文件夹路径（AI 资产库内部相对路径），根目录可为空
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  folderPath?: string;
 }
 
 export class UpdateAiLinkDto {
@@ -65,6 +71,11 @@ export class UpdateAiLinkDto {
   @IsOptional()
   @IsInt()
   sortOrder?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(500)
+  folderPath?: string;
 }
 
 
