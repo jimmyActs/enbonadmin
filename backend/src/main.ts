@@ -1,6 +1,9 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
+import * as express from 'express';
+import history from 'connect-history-api-fallback';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -24,8 +27,25 @@ async function bootstrap() {
     },
   }));
   
-  // 设置全局前缀
+  // 设置全局前缀（API 保持 /api 开头）
   app.setGlobalPrefix('api');
+
+  // 1) SPA history fallback：除了 /api 之外，其它路由都回退到前端 index.html
+  const expressApp = app.getHttpAdapter().getInstance<express.Express>();
+  expressApp.use(
+    history({
+      rewrites: [
+        {
+          // 保留 /api 开头的请求给 Nest 接口处理
+          from: /^\/api\/.*$/,
+          to: (ctx) => ctx.parsedUrl.pathname || ctx.parsedUrl.path,
+        },
+      ],
+    }),
+  );
+
+  // 2) 托管前端静态文件（Vite build 输出目录）
+  expressApp.use(express.static(join(__dirname, '..', '..', 'frontend', 'dist')));
   
   // 默认端口改为 3002，避免与其它本地项目（如 enbon-ai 前端 3000）冲突
   const port = process.env.PORT || 3002;

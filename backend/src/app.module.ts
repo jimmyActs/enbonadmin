@@ -1,6 +1,4 @@
 import { Module } from '@nestjs/common';
-import { ServeStaticModule } from '@nestjs/serve-static';
-import { join } from 'path';
 import { ConfigModule } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
@@ -31,13 +29,6 @@ import { AiLinksModule } from './modules/ai-links/ai-links.module';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
-    }),
-    // 前端静态资源托管：将 build 后的 frontend/dist 通过 Nest 后端一起对外提供
-    ServeStaticModule.forRoot({
-      rootPath: join(__dirname, '..', '..', 'frontend', 'dist'),
-      // 保留 /api 开头的接口由 Nest 处理，而不是被静态文件抢占
-      // 使用 path-to-regexp 官方支持的通配写法：'/api/*' 匹配所有 /api/** 路径
-      exclude: [/^\/api(\/|$)/],
     }),
     TypeOrmModule.forRoot(databaseConfig()),
     AuthModule,
