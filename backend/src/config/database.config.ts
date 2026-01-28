@@ -19,7 +19,10 @@ export const databaseConfig = (): TypeOrmModuleOptions => {
     type: 'sqlite',
     database: absoluteDbPath,
     entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-    synchronize: process.env.NODE_ENV !== 'production', // 生产环境关闭自动同步
+    // 为了简化内部系统的维护，这里默认开启自动同步（包括生产环境）。
+    // 使用 SQLite 且只有单机部署时，TypeORM 的 synchronize 能自动创建新表（如 ai_links、company_culture 等），
+    // 避免每次加实体都要手工执行迁移，否则会出现 500（表不存在）。
+    synchronize: true,
     logging: process.env.NODE_ENV === 'development',
     autoLoadEntities: true,
   };
