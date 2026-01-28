@@ -45,7 +45,10 @@ async function bootstrap() {
   );
 
   // 2) 托管前端静态文件（Vite build 输出目录）
-  expressApp.use(express.static(join(__dirname, '..', '..', 'frontend', 'dist')));
+  // 使用 process.cwd() 保证永远指向项目根目录下的 frontend/dist
+  const clientDist = join(process.cwd(), '..', 'frontend', 'dist');
+  // console.log('Serving client from:', clientDist);
+  expressApp.use(express.static(clientDist));
   
   // 默认端口改为 3002，避免与其它本地项目（如 enbon-ai 前端 3000）冲突
   const port = process.env.PORT || 3002;

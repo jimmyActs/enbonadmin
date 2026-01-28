@@ -285,22 +285,22 @@
       >
         <el-form label-position="top">
           <el-form-item label="标题 / 平台名称">
-            <el-input v-model="aiLinkForm.value.title" placeholder="例如：Midjourney / OpenAI / Stable Diffusion" />
+            <el-input v-model="aiLinkForm.title" placeholder="例如：Midjourney / OpenAI / Stable Diffusion" />
           </el-form-item>
           <el-form-item label="链接 URL">
-            <el-input v-model="aiLinkForm.value.url" placeholder="https://..." />
+            <el-input v-model="aiLinkForm.url" placeholder="https://..." />
           </el-form-item>
           <el-form-item label="简介 / 用途说明">
-            <el-input v-model="aiLinkForm.value.description" type="textarea" :rows="2" />
+            <el-input v-model="aiLinkForm.description" type="textarea" :rows="2" />
           </el-form-item>
           <el-form-item label="账号">
-            <el-input v-model="aiLinkForm.value.account" placeholder="可选：共享账号" />
+            <el-input v-model="aiLinkForm.account" placeholder="可选：共享账号" />
           </el-form-item>
           <el-form-item label="密码">
-            <el-input v-model="aiLinkForm.value.password" placeholder="可选：共享密码" />
+            <el-input v-model="aiLinkForm.password" placeholder="可选：共享密码" />
           </el-form-item>
           <el-form-item label="备注">
-            <el-input v-model="aiLinkForm.value.notes" type="textarea" :rows="2" placeholder="可记录登录方式、注意事项等" />
+            <el-input v-model="aiLinkForm.notes" type="textarea" :rows="2" placeholder="可记录登录方式、注意事项等" />
           </el-form-item>
         </el-form>
         <template #footer>
