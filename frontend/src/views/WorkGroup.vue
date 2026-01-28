@@ -760,14 +760,14 @@ const getWorkStatusText = (status: string): string => {
 }
 
 const isEmployeeOnline = (employee: Employee): boolean => {
-  // 升级版：优先使用后端在线列表判断
-  if (onlineUserIds.value.includes(employee.id)) {
-    return true
+  // 如果员工在个人设置里手动切为“离线”，始终视为离线
+  const status = getEffectiveWorkStatus(employee)
+  if (status === 'offline') {
+    return false
   }
 
-  // 兼容旧逻辑：如果后端暂时没有记录，则根据工作状态兜底
-  const status = getEffectiveWorkStatus(employee)
-  return status !== 'offline'
+  // 否则完全依赖后端心跳列表判断是否在线
+  return onlineUserIds.value.includes(employee.id)
 }
 
 // 获取有效的工作状态（考虑会议状态）
