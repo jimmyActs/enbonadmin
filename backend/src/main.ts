@@ -31,7 +31,8 @@ async function bootstrap() {
   app.setGlobalPrefix('api');
 
   // 1) SPA history fallback：除了 /api 之外，其它路由都回退到前端 index.html
-  const expressApp = app.getHttpAdapter().getInstance<express.Express>();
+  // 某些 Nest 版本的 getInstance 不支持泛型，这里用类型断言兼容旧版本
+  const expressApp = app.getHttpAdapter().getInstance() as express.Express;
   expressApp.use(
     history({
       rewrites: [
