@@ -358,9 +358,10 @@
     <el-dialog
       v-model="showBusinessCardDialog"
       :title="$t('workgroup.businessCard.title')"
-      width="680px"
+      :width="isMobile ? '90%' : '680px'"
       :close-on-click-modal="false"
       class="business-card-dialog"
+      align-center
     >
       <div v-if="selectedCardEmployee" class="business-card-content">
         <!-- 顶部头像和基本信息区域 -->
@@ -449,9 +450,10 @@
     <el-dialog
       v-model="showReminderDialog"
       :title="$t('workgroup.setReminder')"
-      width="500px"
+      :width="isMobile ? '90%' : '500px'"
       :close-on-click-modal="false"
       class="reminder-dialog"
+      align-center
     >
       <el-form
         ref="reminderFormRef"
@@ -1031,6 +1033,7 @@ const handleProfileUpdate = () => {
 }
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
+const isMobile = ref(false)
 
 onMounted(() => {
   loadData()
@@ -1041,7 +1044,11 @@ onMounted(() => {
   refreshTimer = setInterval(() => {
     loadData()
   }, 30000) // 30秒刷新一次
-  
+
+  // 监听窗口尺寸，判断是否为移动端，用于控制对话框宽度/样式
+  handleResize()
+  window.addEventListener('resize', handleResize)
+
   // 监听用户信息更新事件
   window.addEventListener('profile-updated', handleProfileUpdate)
 })
@@ -1051,6 +1058,7 @@ onBeforeUnmount(() => {
   if (refreshTimer) {
     clearInterval(refreshTimer)
   }
+  window.removeEventListener('resize', handleResize)
   window.removeEventListener('meeting-status-updated', handleMeetingStatusUpdate)
   window.removeEventListener('profile-updated', handleProfileUpdate)
 })
