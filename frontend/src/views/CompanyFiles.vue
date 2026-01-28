@@ -277,11 +277,23 @@ import { useUserStore } from '../store/user'
 const { t, locale } = useI18n()
 const userStore = useUserStore()
 
+// 当前登录用户部门 & 是否品牌管理中心
+const currentDepartment = computed(() => userStore.userInfo?.department || '')
+const isBrandDepartment = computed(() => currentDepartment.value === 'planning')
+
 // 是否具备“工作空间内容管理”权限：控制公司文件的上传/新建/重命名/删除等操作按钮
 const canManageWorkspace = computed(() => {
   const role = userStore.userInfo?.role
+  const hasBasePermission = userStore.hasPermission?.('workspace.companyFiles.manage') ?? false
+
   if (role === 'super_admin') return true
-  return userStore.hasPermission?.('workspace.companyFiles.manage') ?? false
+
+  // AI 资产库：仅品牌管理中心可操作
+  if (activeCategory.value === 'ai-assets') {
+    return hasBasePermission && isBrandDepartment.value
+  }
+
+  return hasBasePermission
 })
 
 // 默认盘符 & 根目录（如后台未配置时使用）
@@ -327,8 +339,10 @@ const selectedSeriesForFolder = ref('')
 const categoryConfigs = computed(() => {
   const localeIsZh = locale.value.startsWith('zh')
 
-  // 如果后端还没返回，就用默认 5 大类兜底
-  const source: Array<CompanyFileCategory & { icon?: string; folder: string }> =
+  const isBrandDept = isBrandDepartment.value || userStore.userInfo?.role === 'super_admin'
+
+  // 如果后端还没返回，就用默认分类兜底
+  let source: Array<CompanyFileCategory & { icon?: string; folder: string }> =
     categories.value.length
       ? categories.value
       : [
@@ -392,7 +406,24 @@ const categoryConfigs = computed(() => {
             sortOrder: 5,
             enabled: true,
           },
+          {
+            id: 6,
+            key: 'ai-assets',
+            nameZh: 'AI资产库',
+            nameEn: 'AI Assets',
+            descZh: 'AI 图片、视频、提示词、音乐等资产',
+            descEn: 'AI images, videos, prompts, music and workflows.',
+            icon: 'ai-assets',
+            folder: 'ai-assets',
+            sortOrder: 6,
+            enabled: true,
+          },
         ]
+
+  // 非品牌部用户：隐藏 AI 资产库分类
+  if (!isBrandDept) {
+    source = source.filter((c) => c.key !== 'ai-assets')
+  }
 
   // 统一的 UI 文案（不受后端数据库影响）
   const uiTextMap: Record<
@@ -429,6 +460,12 @@ const categoryConfigs = computed(() => {
       descZh: 'LOGO、证书、其他文件等',
       descEn: 'Logos, certificates and other brand files.',
     },
+    'ai-assets': {
+      titleZh: 'AI资产库',
+      titleEn: 'AI Assets',
+      descZh: '品牌部内部的 AI 图片 / 视频 / 提示词 / 音乐等资产',
+      descEn: 'AI images, videos, prompts, music and workflows for brand team.',
+    },
   }
 
   const iconMap: Record<string, any> = {
@@ -437,6 +474,7 @@ const categoryConfigs = computed(() => {
     videos: VideoCamera,
     marketing: Promotion,
     brand: Collection,
+    'ai-assets': Grid,
   }
 
   return source.map((c) => ({

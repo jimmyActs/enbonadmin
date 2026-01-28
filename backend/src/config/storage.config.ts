@@ -20,7 +20,7 @@ export const storageConfig = (): MulterModuleOptions => {
       },
     }),
     limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB
+      fileSize: 1024 * 1024 * 1024, // 1GB
     },
     fileFilter: (req, file, cb) => {
       // 可以在这里添加文件类型验证

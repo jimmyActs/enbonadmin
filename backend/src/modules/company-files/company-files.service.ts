@@ -16,7 +16,7 @@ export class CompanyFilesService {
   ) {}
 
   /**
-   * 在模块初始化时确保默认的五个分类存在
+   * 在模块初始化时确保默认的分类存在
    */
   async ensureDefaultCategories(): Promise<void> {
     const defaults: Array<Partial<CompanyFileCategory>> = [
@@ -69,6 +69,16 @@ export class CompanyFilesService {
         icon: '📂',
         folder: 'brand',
         sortOrder: 5,
+      },
+      {
+        key: 'ai-assets',
+        nameZh: 'AI资产库',
+        nameEn: 'AI Assets',
+        descZh: '品牌部内部使用的 AI 图片 / 视频 / 提示词 / 音乐等资产',
+        descEn: 'AI images, videos, prompts, music and workflows for brand team.',
+        icon: '🤖',
+        folder: 'ai-assets',
+        sortOrder: 6,
       },
     ];
 

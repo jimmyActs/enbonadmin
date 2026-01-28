@@ -309,7 +309,7 @@ export class FilesController {
     storage: undefined, // 使用内存存储，这样file.buffer可用
     preservePath: true,
     limits: {
-      fileSize: 100 * 1024 * 1024, // 100MB
+      fileSize: 1024 * 1024 * 1024, // 1GB
     },
     fileFilter: (req, file, cb) => {
       // 处理文件名编码
@@ -344,7 +344,7 @@ export class FilesController {
     @UploadedFile(
       new ParseFilePipe({
         validators: [
-          new MaxFileSizeValidator({ maxSize: 100 * 1024 * 1024 }), // 100MB
+          new MaxFileSizeValidator({ maxSize: 1024 * 1024 * 1024 }), // 1GB
         ],
       }),
     )
