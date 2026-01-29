@@ -147,6 +147,16 @@ export const getPreviewUrl = (driveId: string, path: string): string => {
   return `${baseURL}/files/preview?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`;
 };
 
+// 获取缩略图URL（仅图片使用）
+export const getThumbnailUrl = (driveId: string, path: string): string => {
+  const baseURL = (api.defaults.baseURL as string | undefined) || getApiBaseURL();
+  const encodedPath = encodeURIComponent(path);
+  const encodedDriveId = encodeURIComponent(driveId);
+  const token = localStorage.getItem('token');
+  const tokenParam = token ? `&token=${token}` : '';
+  return `${baseURL}/files/thumbnail?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`;
+};
+
 // 重命名盘
 export const renameDrive = (driveId: string, displayName: string): Promise<{ success: boolean; message?: string }> => {
   return api.put(`/files/drives/${driveId}/rename`, { displayName });

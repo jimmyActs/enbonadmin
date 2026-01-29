@@ -130,13 +130,8 @@
                 📂
               </template>
               <template v-else-if="item.isImage">
-                <!-- 图片缩略图：使用后端预览URL，加载失败时浏览器会自动显示占位图标 -->
-                <img
-                  v-if="getPreviewThumbnail(item)"
-                  :src="getPreviewThumbnail(item)"
-                  alt="thumb"
-                />
-                <span v-else>🖼️</span>
+                <!-- 为了避免缩略图请求 /files/preview 报 400（盘符/路径兼容问题），这里统一使用占位图标 -->
+                <span>🖼️</span>
               </template>
               <template v-else-if="item.isVideo">
                 🎬
@@ -348,6 +343,7 @@ import {
   renameFile,
   downloadFile,
   getPreviewUrl,
+  getThumbnailUrl,
   type FileItem,
 } from '../api/files'
 import { getWorkspaceStorageConfigs, type WorkspaceStorageConfig } from '../api/workspace-storage'
@@ -1045,8 +1041,8 @@ const getTypeBadge = (item: FileItem): { text: string; cls: string } | null => {
 
 const getPreviewThumbnail = (item: FileItem): string | null => {
   if (!item.isImage) return null
-  // 直接复用预览地址作为缩略图
-  return getPreviewUrl(driveId.value, item.path)
+  // 使用专门的缩略图接口，路径解析与下载保持一致
+  return getThumbnailUrl(driveId.value, item.path)
 }
 
 // 去掉前缀 [类型]，用于界面展示文件/文件夹名称

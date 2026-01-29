@@ -256,6 +256,69 @@ export class FilesController {
   }
 
   /**
+   * 图片缩略图（用于文件列表中的缩略图展示）
+   * 说明：
+   * - 仅支持图片类型（jpg/jpeg/png/gif/webp/bmp/svg）；
+   * - 路径解析复用下载接口的逻辑，保证与下载一致；
+   * - 返回原图，由前端自行按样式缩放为缩略图。
+   */
+  @Get('thumbnail')
+  async getThumbnail(
+    @Query('driveId') driveId: string,
+    @Query('path') filePath: string,
+    @Res() res: Response,
+  ) {
+    try {
+      console.log('缩略图请求:', { driveId, filePath });
+
+      // 复用下载路径解析逻辑，确保与下载一致
+      const fullPath = await this.filesService.getDownloadPath(driveId, filePath);
+
+      const ext = path.extname(filePath).toLowerCase();
+      const isImage = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'].includes(ext);
+
+      if (!isImage) {
+        throw new BadRequestException('仅支持图片缩略图');
+      }
+
+      const contentType =
+        ext === '.svg'
+          ? 'image/svg+xml'
+          : ext === '.jpg' || ext === '.jpeg'
+          ? 'image/jpeg'
+          : ext === '.png'
+          ? 'image/png'
+          : ext === '.gif'
+          ? 'image/gif'
+          : ext === '.webp'
+          ? 'image/webp'
+          : ext === '.bmp'
+          ? 'image/bmp'
+          : `image/${ext.slice(1)}`;
+
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+      res.sendFile(fullPath);
+    } catch (error: any) {
+      console.error('获取缩略图错误:', error);
+
+      if (!res.headersSent) {
+        if (error instanceof NotFoundException || error instanceof BadRequestException || error instanceof ForbiddenException) {
+          res.status(error.getStatus()).json({
+            statusCode: error.getStatus(),
+            message: error.message,
+          });
+        } else {
+          res.status(500).json({
+            statusCode: 500,
+            message: `缩略图获取失败: ${error.message || '未知错误'}`,
+          });
+        }
+      }
+    }
+  }
+
+  /**
    * 创建文件夹
    */
   @Post('folder')
