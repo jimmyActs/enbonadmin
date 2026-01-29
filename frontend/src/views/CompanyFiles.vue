@@ -826,8 +826,8 @@ const handleDownload = async (item: FileItem) => {
 // 预览：优先使用下载接口生成本地预览（解决部分环境下 /files/preview 报错的问题）
 const handlePreview = async (item: FileItem) => {
   try {
-    // 对图片优先走下载 -> Blob 的方式，在新标签中打开，避免依赖后端 preview 接口
-    if (item.isImage) {
+    // 对图片和 PDF，优先走下载 -> Blob 的方式，在新标签中打开，避免依赖后端 preview 接口
+    if (item.isImage || item.isPdf) {
       const blob = await downloadFile(driveId.value, item.path)
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
