@@ -806,7 +806,9 @@ const getDepartmentName = (dept?: string): string => {
 const getTeamName = (team?: string): string => {
   if (!team) return '-'
   const teamInfo = teams.value.find(t => t.value === team)
-  return teamInfo?.label || team
+  const label = teamInfo?.label || team
+  // 更简洁：去掉前缀“销售-”，只保留战区名（例如 “销售-欧亚组” -> “欧亚组”）
+  return label.replace(/^销售[-：:\s]*/, '')
 }
 
 const getStatusType = (status: string): string => {

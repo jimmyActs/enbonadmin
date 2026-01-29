@@ -309,10 +309,10 @@
               <div class="employee-details">
                 <!-- 职位 -->
                 <span class="employee-position">{{ getPositionName(employee.position) }}</span>
-                <!-- 战区（仅销售部显示，例如“销售 · 欧亚组”） -->
+                <!-- 销售战区（例如 “销售 · 欧亚组”） -->
                 <template v-if="employee.department === 'sales' && employee.team">
                   <span class="employee-separator">·</span>
-                  <span class="employee-department">{{ employee.team }}</span>
+                  <span class="employee-department">{{ getTeamName(employee.team) }}</span>
                 </template>
                 <!-- 其他部门：仍然显示部门名称 -->
                 <template v-else>
@@ -568,6 +568,28 @@ const departmentNames: Record<string, { zh: string; en: string }> = {
   management: { zh: '总经办', en: 'Management' },
 }
 
+// 销售战区名称映射，复用员工管理里的配置
+const teams = computed(() => [
+  { label: t('employees.teams.sales_japan_korea'), value: 'sales_japan_korea' }, // 销售-日韩组
+  { label: t('employees.teams.sales_middle_east'), value: 'sales_middle_east' }, // 销售-中东组
+  { label: t('employees.teams.sales_india'), value: 'sales_india' }, // 销售-印度组
+  { label: t('employees.teams.sales_europe_asia'), value: 'sales_europe_asia' }, // 销售-欧亚组
+])
+
+const getDepartmentName = (dept: string): string => {
+  const deptInfo = departmentNames[dept]
+  if (!deptInfo) return dept
+  return locale.value === 'en-US' ? deptInfo.en : deptInfo.zh
+}
+
+const getTeamName = (team?: string): string => {
+  if (!team) return '-'
+  const info = teams.value.find(t => t.value === team)
+  const label = info?.label || team
+  // 更简洁：去掉前缀“销售-”，只保留战区名（例如 “销售-欧亚组” -> “欧亚组”）
+  return label.replace(/^销售[-：:\s]*/, '')
+}
+
 // 出差/驻外目的地编码 -> 中英双语标签
 const destinationLabelMap: Record<string, string> = {
   china: '中国 / China',
@@ -593,12 +615,6 @@ const destinationLabelMap: Record<string, string> = {
   russia: '俄罗斯 / Russia',
   australia: '澳大利亚 / Australia',
   canada: '加拿大 / Canada',
-}
-
-const getDepartmentName = (dept: string): string => {
-  const deptInfo = departmentNames[dept]
-  if (!deptInfo) return dept
-  return locale.value === 'en-US' ? deptInfo.en : deptInfo.zh
 }
 
 // 职位名称映射：支持职位编码 -> 多语言名称，兼容旧数据直接显示
