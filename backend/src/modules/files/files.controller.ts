@@ -136,13 +136,19 @@ export class FilesController {
     try {
       console.log('预览文件请求:', { driveId, filePath });
 
-      const drive = await this.filesService.getDriveInfo(driveId);
+      // 为了避免在部分环境下 getDriveInfo 误报“盘不存在”，这里采用更直接、容错性更高的方式：
+      // 1) 仍然优先尝试通过 FilesService 获取盘信息；
+      // 2) 如果获取失败，则退回到根据 driveId 推导盘符（例如 d -> D:\）；
+      // 3) 如果最终拼出的路径下文件不存在，再返回更精确的错误信息。
+      let drive = await this.filesService.getDriveInfo(driveId);
       if (!drive) {
-        throw new NotFoundException('盘不存在');
+        const letter = (driveId || 'd').charAt(0).toUpperCase();
+        const rootPath = `${letter}:\\`;
+        drive = { path: rootPath } as any;
       }
 
-      // 解码路径（前端可能进行了URL编码）
-      const decodedPath = decodeURIComponent(filePath);
+      // 解码路径（前端可能进行了URL编码），并拼接到盘根目录下
+      const decodedPath = decodeURIComponent(filePath || '');
       const fullPath = path.resolve(path.join(drive.path, decodedPath));
       
       console.log('预览文件路径:', {
