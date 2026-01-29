@@ -823,11 +823,11 @@ const handleDownload = async (item: FileItem) => {
   }
 }
 
-// 预览：优先使用下载接口生成本地预览（解决部分环境下 /files/preview 报错的问题）
+// 预览：根据文件类型选择最合适的方式，一处统一处理所有分类
 const handlePreview = async (item: FileItem) => {
   try {
-    // 对图片和 PDF，优先走下载 -> Blob 的方式，在新标签中打开，避免依赖后端 preview 接口
-    if (item.isImage || item.isPdf) {
+    // 1）图片：下载 -> Blob，在新标签直接打开图片
+    if (item.isImage) {
       const blob = await downloadFile(driveId.value, item.path)
       const url = URL.createObjectURL(blob)
       window.open(url, '_blank')
@@ -835,14 +835,59 @@ const handlePreview = async (item: FileItem) => {
       setTimeout(() => URL.revokeObjectURL(url), 60_000)
       return
     }
-  } catch (e) {
-    // 如果下载失败，退回到原来的预览 URL 方式
-    console.error('图片预览下载失败，回退到预览URL', e)
-  }
 
-  // 非图片或下载预览失败，仍然通过后端预览 URL 打开
-  const url = getPreviewUrl(driveId.value, item.path)
-  window.open(url, '_blank')
+    // 2）PDF：下载 -> Blob，在新标签用浏览器自带 PDF 查看器打开
+    if (item.isPdf) {
+      const blob = await downloadFile(driveId.value, item.path)
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      return
+    }
+
+    // 3）视频：下载 -> Blob，在新标签里嵌一个 <video> 播放器
+    if (item.isVideo) {
+      const blob = await downloadFile(driveId.value, item.path)
+      const url = URL.createObjectURL(blob)
+      const win = window.open('', '_blank')
+      if (win) {
+        const title = item.name || 'Video'
+        win.document.write(`
+          <html>
+            <head><title>${title}</title></head>
+            <body style="margin:0;background:#000;display:flex;align-items:center;justify-content:center;">
+              <video src="${url}" controls autoplay style="max-width:100%;max-height:100%;"></video>
+            </body>
+          </html>
+        `)
+        win.document.close()
+      }
+      // 不急着 revoke，交给浏览器在标签页关闭时回收
+      return
+    }
+
+    // 4）文本类（txt / json / log / csv 等）：走后端 preview，以文本形式打开
+    if (item.isText) {
+      const url = getPreviewUrl(driveId.value, item.path)
+      window.open(url, '_blank')
+      return
+    }
+
+    // 5）Office 等其它类型：直接触发浏览器下载
+    const blob = await downloadFile(driveId.value, item.path)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = item.name || 'file'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    return
+  } catch (e) {
+    console.error('预览失败', e)
+    ElMessage.error(t('files.previewFailed') || t('common.error'))
+  }
 }
 
 // 上传
