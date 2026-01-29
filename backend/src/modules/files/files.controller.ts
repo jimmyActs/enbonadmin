@@ -135,10 +135,6 @@ export class FilesController {
   ) {
     try {
       console.log('预览文件请求:', { driveId, filePath });
-      
-      if (!driveId || !filePath) {
-        throw new BadRequestException('参数不完整');
-      }
 
       const drive = await this.filesService.getDriveInfo(driveId);
       if (!drive) {
