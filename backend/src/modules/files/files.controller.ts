@@ -139,27 +139,25 @@ export class FilesController {
       // 为了避免在部分环境下 getDriveInfo 误报“盘不存在”，这里采用更直接、容错性更高的方式：
       // 1) 仍然优先尝试通过 FilesService 获取盘信息；
       // 2) 如果获取失败，则退回到根据 driveId 推导盘符（例如 d -> D:\）；
-      // 3) 如果最终拼出的路径下文件不存在，再返回更精确的错误信息。
-      let drive = await this.filesService.getDriveInfo(driveId);
-      if (!drive) {
-        const letter = (driveId || 'd').charAt(0).toUpperCase();
-        const rootPath = `${letter}:\\`;
-        drive = { path: rootPath } as any;
-      }
+      // 3) 使用最终确定的盘根路径 drivePath 拼接文件完整路径。
+      const driveInfo = await this.filesService.getDriveInfo(driveId);
+      const letter = (driveId || 'd').charAt(0).toUpperCase();
+      const fallbackRoot = `${letter}:\\`;
+      const drivePath = driveInfo?.path ?? fallbackRoot;
 
       // 解码路径（前端可能进行了URL编码），并拼接到盘根目录下
       const decodedPath = decodeURIComponent(filePath || '');
-      const fullPath = path.resolve(path.join(drive.path, decodedPath));
+      const fullPath = path.resolve(path.join(drivePath, decodedPath));
       
       console.log('预览文件路径:', {
         originalPath: filePath,
         decodedPath: decodedPath,
-        drivePath: drive.path,
-        fullPath: fullPath,
+        drivePath,
+        fullPath,
       });
       
       // 安全检查：确保路径在drive.path下
-      const normalizedDrivePath = path.resolve(drive.path);
+      const normalizedDrivePath = path.resolve(drivePath);
       if (!fullPath.startsWith(normalizedDrivePath)) {
         console.error('路径安全检查失败:', {
           fullPath,
