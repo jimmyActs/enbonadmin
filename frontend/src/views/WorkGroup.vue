@@ -307,9 +307,18 @@
                 <span class="employee-name">{{ getEmployeeDisplayName(employee) }}</span>
               </div>
               <div class="employee-details">
+                <!-- 职位 -->
                 <span class="employee-position">{{ getPositionName(employee.position) }}</span>
-                <span class="employee-separator">·</span>
-                <span class="employee-department">{{ getDepartmentName(employee.department || '') }}</span>
+                <!-- 战区（仅销售部显示，例如“销售 · 欧亚组”） -->
+                <template v-if="employee.department === 'sales' && employee.team">
+                  <span class="employee-separator">·</span>
+                  <span class="employee-department">{{ employee.team }}</span>
+                </template>
+                <!-- 其他部门：仍然显示部门名称 -->
+                <template v-else>
+                  <span class="employee-separator">·</span>
+                  <span class="employee-department">{{ getDepartmentName(employee.department || '') }}</span>
+                </template>
               </div>
             </div>
             <div class="employee-actions">

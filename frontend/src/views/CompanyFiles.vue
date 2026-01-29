@@ -130,12 +130,8 @@
                 📂
               </template>
               <template v-else-if="item.isImage">
-                <img
-                  v-if="getPreviewThumbnail(item)"
-                  :src="getPreviewThumbnail(item)"
-                  alt="thumb"
-                />
-                <span v-else>🖼️</span>
+                <!-- 为了兼容部分环境下 /files/preview 报 400 的情况，这里统一使用占位缩略图 -->
+                <span>🖼️</span>
               </template>
               <template v-else-if="item.isVideo">
                 🎬

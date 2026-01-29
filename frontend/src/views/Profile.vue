@@ -38,7 +38,7 @@
 
         <!-- 右侧：工作状态和心情设置 -->
         <el-col :span="16">
-          <el-form :model="formData" label-width="120px">
+          <el-form :model="formData" label-width="120px" class="profile-form">
             <el-form-item :label="$t('profile.workStatusLabel')">
               <div style="display: flex; gap: 8px; align-items: flex-start;">
                 <el-select 
@@ -713,6 +713,50 @@ onMounted(() => {
 
     :deep(.el-form-item__content) {
       margin-left: 90px !important;
+    }
+  }
+}
+
+/* 移动端适配：让表单输入框和公司账号区域在手机上更宽、更合理 */
+@media (max-width: 768px) {
+  .profile-container {
+    .profile-content {
+      .el-row {
+        flex-direction: column;
+      }
+
+      .el-col {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+    }
+  }
+
+  .profile-form {
+    :deep(.el-form-item__label) {
+      width: 100px !important;
+      padding-right: 8px;
+      box-sizing: border-box;
+    }
+
+    :deep(.el-form-item__content) {
+      flex: 1;
+    }
+
+    :deep(.el-input),
+    :deep(.el-select),
+    :deep(.el-textarea) {
+      width: 100%;
+    }
+  }
+
+  /* 公司分配账号区域：在手机上改为单列展示，每行一个输入框 */
+  :deep(.el-row) {
+    & > .el-col {
+      @media (max-width: 768px) {
+        width: 100% !important;
+        max-width: 100% !important;
+      }
     }
   }
 }
