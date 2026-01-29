@@ -432,6 +432,8 @@ interface AiLinkForm {
 }
 
 const aiLinks = ref<ApiAiLink[]>([])
+// AI 资产库下，当前所在的「子文件夹路径」（相对于 ai-assets 根），根目录用空字符串表示
+const aiCurrentFolderPath = ref('')
 const showLinkDialog = ref(false)
 const editingLink = ref<ApiAiLink | null>(null)
 const aiLinkForm = ref<AiLinkForm>({
@@ -635,7 +637,12 @@ const goBack = () => {
   if (!currentPath.value) return
   const segments = currentPath.value.split('/').filter(Boolean)
   segments.pop()
-  currentPath.value = segments.join('/')
+  const newPath = segments.join('/')
+  currentPath.value = newPath
+  // 在 AI 资产库下返回上一级时，同步更新 AI 链接使用的文件夹路径
+  if (activeCategory.value === 'ai-assets') {
+    aiCurrentFolderPath.value = newPath
+  }
   loadFiles()
 }
 
@@ -658,8 +665,9 @@ const loadFiles = async () => {
     // 如果是在 AI 资产库分类下，同时加载当前文件夹下的 AI 链接列表
     if (activeCategory.value === 'ai-assets') {
       try {
-        // 使用当前路径作为 AI 链接的「所属文件夹」，根目录传空字符串
-        const folderPath = currentPath.value || ''
+        // 专门使用 aiCurrentFolderPath 作为 AI 链接的「所属文件夹」来源
+        // 根目录仍然用空字符串表示（后端会保存为 NULL）
+        const folderPath = aiCurrentFolderPath.value || ''
         aiLinks.value = await getAiLinks(folderPath)
       } catch (e) {
         console.error('加载 AI 链接失败', e)
@@ -683,6 +691,10 @@ const handleCategoryClick = (key: string) => {
   if (activeCategory.value === key) return
   activeCategory.value = key
   currentPath.value = ''
+  // 切换到 AI 资产库时，同步复位 AI 链接使用的文件夹路径
+  if (key === 'ai-assets') {
+    aiCurrentFolderPath.value = ''
+  }
   activeSeries.value = 'all'
   searchKeyword.value = ''
   loadFiles()
@@ -701,7 +713,12 @@ const normalizeCategoryPath = (rawPath: string): string => {
 }
 
 const navigateToPath = (path: string) => {
-  currentPath.value = normalizeCategoryPath(path)
+  const normalized = normalizeCategoryPath(path)
+  currentPath.value = normalized
+  // 单独记录一份 AI 资产库下的当前子文件夹路径，避免任何地方对 currentPath 的误操作造成影响
+  if (activeCategory.value === 'ai-assets') {
+    aiCurrentFolderPath.value = normalized
+  }
   loadFiles()
 }
 
@@ -910,7 +927,9 @@ const saveAiLink = async () => {
   }
 
   try {
-    const folderPath = currentPath.value || ''
+    // 仅在 AI 资产库下使用 AI 链接功能，这里直接使用 aiCurrentFolderPath 作为所属文件夹路径
+    // 根目录仍然用空字符串表示（后端会保存为 NULL）
+    const folderPath = aiCurrentFolderPath.value || ''
 
     if (editingLink.value) {
       const updated = await updateAiLink(editingLink.value.id, {

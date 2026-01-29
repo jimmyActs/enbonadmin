@@ -168,7 +168,15 @@
           </div>
           <div class="detail-info">
             <h3 class="detail-name">{{ detailEmployee.nickname }}</h3>
-                <p class="detail-position">{{ getPositionName(detailEmployee.position) }}</p>
+            <!-- 职位 + 战区：销售同事显示“销售 · 欧亚组”等，其它部门只显示职位 -->
+            <p class="detail-position">
+              <template v-if="detailEmployee.department === 'sales' && detailEmployee.team">
+                {{ getPositionName(detailEmployee.position) }} · {{ getTeamName(detailEmployee.team) }}
+              </template>
+              <template v-else>
+                {{ getPositionName(detailEmployee.position) }}
+              </template>
+            </p>
             <el-tag 
               :type="getStatusType(detailEmployee.employmentStatus)" 
               size="small"
