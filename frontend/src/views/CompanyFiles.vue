@@ -845,7 +845,28 @@ const handlePreview = async (item: FileItem) => {
       return
     }
 
-    // 3）视频：下载 -> Blob，在新标签里嵌一个 <video> 播放器
+    // 3）音频：下载 -> Blob，在新标签里嵌一个 <audio> 播放器，支持 MP3 等试听
+    if (isAudioFile(item)) {
+      const blob = await downloadFile(driveId.value, item.path)
+      const url = URL.createObjectURL(blob)
+      const win = window.open('', '_blank')
+      if (win) {
+        const title = item.name || 'Audio'
+        win.document.write(`
+          <html>
+            <head><title>${title}</title></head>
+            <body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;">
+              <audio src="${url}" controls autoplay style="width:80%;max-width:600px;"></audio>
+            </body>
+          </html>
+        `)
+        win.document.close()
+      }
+      // 交给浏览器在标签页关闭时回收 URL
+      return
+    }
+
+    // 4）视频：下载 -> Blob，在新标签里嵌一个 <video> 播放器
     if (item.isVideo) {
       const blob = await downloadFile(driveId.value, item.path)
       const url = URL.createObjectURL(blob)
@@ -866,14 +887,14 @@ const handlePreview = async (item: FileItem) => {
       return
     }
 
-    // 4）文本类（txt / json / log / csv 等）：走后端 preview，以文本形式打开
+    // 5）文本类（txt / json / log / csv 等）：走后端 preview，以文本形式打开
     if (item.isText) {
       const url = getPreviewUrl(driveId.value, item.path)
       window.open(url, '_blank')
       return
     }
 
-    // 5）Office 等其它类型：直接触发浏览器下载
+    // 6）Office 等其它类型：直接触发浏览器下载
     const blob = await downloadFile(driveId.value, item.path)
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -1082,6 +1103,12 @@ const getTypeBadge = (item: FileItem): { text: string; cls: string } | null => {
   if (item.isVideo) return { text: (item.extension || '').replace('.', '').toUpperCase() || 'MP4', cls: 'bg-mp4' }
   if (item.isImage) return { text: (item.extension || '').replace('.', '').toUpperCase() || 'IMG', cls: 'bg-img' }
   return null
+}
+
+// 判断是否为音频文件（用于预览逻辑）
+const isAudioFile = (item: FileItem): boolean => {
+  const ext = (item.extension || '').toLowerCase()
+  return ['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(ext)
 }
 
 const getPreviewThumbnail = (item: FileItem): string | null => {
