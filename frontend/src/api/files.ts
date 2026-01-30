@@ -148,15 +148,17 @@ export const getPreviewUrl = (driveId: string, path: string): string => {
 };
 
 // 获取缩略图URL（仅图片使用）
+// 说明：
+// - 使用后端专门的 /files/thumbnail 接口，返回带正确 Content-Type 的图片内容；
+// - 与下载/预览保持同一套路径解析规则（内部复用了 getDownloadPath）；
+// - 不依赖 Axios，因此 <img> 直接访问即可。
 export const getThumbnailUrl = (driveId: string, path: string): string => {
   const baseURL = (api.defaults.baseURL as string | undefined) || getApiBaseURL();
   const encodedPath = encodeURIComponent(path);
   const encodedDriveId = encodeURIComponent(driveId);
   const token = localStorage.getItem('token');
   const tokenParam = token ? `&token=${token}` : '';
-  // 为了避免额外的缩略图接口 404，这里直接复用下载接口作为缩略图来源。
-  // 浏览器在 <img> 中访问下载地址时，会按图片内容渲染，即便文件较大也能看到真实缩略图。
-  return `${baseURL}/files/download?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`;
+  return `${baseURL}/files/thumbnail?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`;
 };
 
 // 重命名盘

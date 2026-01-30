@@ -892,10 +892,29 @@ const handlePreview = async (item: FileItem) => {
       return
     }
 
-    // 5）文本类（txt / json / log / csv 等）：走后端 preview，以文本形式打开
+    // 5）文本类（txt / json / log / csv 等）：下载 -> 在新标签页以纯文本形式展示
     if (item.isText) {
-      const url = getPreviewUrl(driveId.value, item.path)
-      window.open(url, '_blank')
+      const blob = await downloadFile(driveId.value, item.path)
+      const text = await blob.text()
+      const win = window.open('', '_blank')
+      if (win) {
+        const title = item.name || 'Text'
+        // 简单的 HTML 转义，避免文本里包含 <script> 等被当成 HTML 解析
+        const safeText = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+
+        win.document.write(`
+          <html>
+            <head><title>${title}</title></head>
+            <body style="margin:0;background:#111;color:#eee;font-family:monospace;">
+              <pre style="white-space:pre-wrap;padding:16px;">${safeText}</pre>
+            </body>
+          </html>
+        `)
+        win.document.close()
+      }
       return
     }
 
