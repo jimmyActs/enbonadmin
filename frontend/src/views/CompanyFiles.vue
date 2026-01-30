@@ -130,12 +130,11 @@
                 📂
               </template>
               <template v-else-if="item.isImage">
-                <!-- 图片：优先使用缩略图接口获取真实缩略图，如果失败再退回下载接口；最后才显示占位图标 -->
+                <!-- 图片：懒加载缩略图（通过下载接口获取 Blob），失败时显示占位图标 -->
                 <img
                   v-if="getPreviewThumbnail(item)"
                   :src="getPreviewThumbnail(item)"
                   :alt="getDisplayName(item)"
-                  :data-path="item.path"
                   @error="handleImageError"
                 />
                 <span v-else>🖼️</span>
@@ -450,6 +449,10 @@ const aiLinkForm = ref<AiLinkForm>({
   password: '',
   notes: '',
 })
+
+// 图片缩略图缓存（公司文件模块）：key 为文件 path，value 为 Blob URL
+const thumbnailMap = ref<Record<string, string>>({})
+const thumbnailLoading = ref<Record<string, boolean>>({})
 
 // 顶部展示用的分类卡片（已适配中英双语 & 后端配置）
 const categoryConfigs = computed(() => {
@@ -1138,38 +1141,36 @@ const isAudioFile = (item: FileItem): boolean => {
   return ['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(ext)
 }
 
+// 懒加载缩略图：公司文件模块直接通过下载接口获取 Blob 并生成 URL
 const getPreviewThumbnail = (item: FileItem): string | null => {
   if (!item.isImage) return null
-  // 使用专门的缩略图接口，路径解析与下载保持一致
-  return getThumbnailUrl(driveId.value, item.path)
+  const key = item.path
+
+  if (!thumbnailMap.value[key] && !thumbnailLoading.value[key]) {
+    loadThumbnail(item.path)
+  }
+
+  return thumbnailMap.value[key] || null
 }
 
-// 图片缩略图加载失败时的兜底处理：
-// 第一次失败：改用下载接口作为缩略图数据源；第二次仍失败则显示占位图标。
+const loadThumbnail = async (filePath: string) => {
+  if (!driveId.value) return
+  const key = filePath
+  thumbnailLoading.value[key] = true
+  try {
+    const blob = await downloadFile(driveId.value, filePath)
+    thumbnailMap.value[key] = URL.createObjectURL(blob)
+  } catch (error) {
+    console.error('公司文件缩略图加载失败:', filePath, error)
+  } finally {
+    thumbnailLoading.value[key] = false
+  }
+}
+
+// 图片缩略图加载失败时：直接隐藏当前图片，由占位图标兜底
 const handleImageError = (e: Event) => {
   const img = e.target as HTMLImageElement
-  const filePath = img.dataset.path
-
-  if (!filePath) {
-    img.style.display = 'none'
-    return
-  }
-
-  if (img.dataset.fallbackTried === '1') {
-    // 已经尝试过一次兜底，仍失败则直接隐藏，交给外层占位符
-    img.style.display = 'none'
-    return
-  }
-
-  img.dataset.fallbackTried = '1'
-
-  const baseURL = getApiBaseURL()
-  const encodedPath = encodeURIComponent(filePath)
-  const encodedDriveId = encodeURIComponent(driveId.value)
-  const token = localStorage.getItem('token')
-  const tokenParam = token ? `&token=${token}` : ''
-
-  img.src = `${baseURL}/files/download?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`
+  img.style.display = 'none'
 }
 
 // 去掉前缀 [类型]，用于界面展示文件/文件夹名称

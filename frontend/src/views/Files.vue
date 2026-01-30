@@ -127,9 +127,8 @@
                     <div class="thumbnail-cell">
                       <img
                         v-if="row.isImage && currentDrive"
-                        :src="getThumbnailUrlLocal(row.path)"
+                        :src="getThumbnailSrc(row.path)"
                         :alt="row.name"
-                        :data-path="row.path"
                         class="thumbnail-img"
                         @error="handleImageError"
                       />
@@ -235,9 +234,8 @@
                   <div class="file-card-thumbnail">
                     <img
                       v-if="item.isImage && currentDrive"
-                      :src="getThumbnailUrlLocal(item.path)"
+                      :src="getThumbnailSrc(item.path)"
                       :alt="item.name"
-                      :data-path="item.path"
                       class="file-card-img"
                       @error="handleImageError"
                     />
@@ -642,6 +640,9 @@ const uploadRef = ref()
 const previewFile = ref<FileItem | null>(null)
 // 预览图片的 Blob URL（优先使用下载接口生成，避免依赖 /files/preview 出错）
 const previewImageUrl = ref('')
+// 图片缩略图缓存：key 为文件 path，value 为 Blob URL
+const thumbnailMap = ref<Record<string, string>>({})
+const thumbnailLoading = ref<Record<string, boolean>>({})
 
 // 表单数据
 const folderForm = ref({ name: '', isLocked: false, password: '' })
@@ -969,10 +970,30 @@ const getPreviewUrlLocal = (filePath: string): string => {
   return url
 }
 
-// 获取缩略图URL（图片统一走缩略图接口，保证路径解析与下载一致）
-const getThumbnailUrlLocal = (filePath: string): string => {
+// 懒加载缩略图：优先从缓存读取，没有则通过下载接口获取 Blob 并生成 URL
+const getThumbnailSrc = (filePath: string): string => {
   if (!currentDrive.value) return ''
-  return getThumbnailUrl(currentDrive.value.id, filePath)
+  const key = filePath
+
+  if (!thumbnailMap.value[key] && !thumbnailLoading.value[key]) {
+    loadThumbnail(key)
+  }
+
+  return thumbnailMap.value[key] || ''
+}
+
+const loadThumbnail = async (filePath: string) => {
+  if (!currentDrive.value) return
+  const key = filePath
+  thumbnailLoading.value[key] = true
+  try {
+    const blob = await downloadFile(currentDrive.value.id, filePath)
+    thumbnailMap.value[key] = URL.createObjectURL(blob)
+  } catch (error) {
+    console.error('缩略图加载失败:', filePath, error)
+  } finally {
+    thumbnailLoading.value[key] = false
+  }
 }
 
 // 图片加载错误处理
@@ -983,34 +1004,10 @@ const handlePreviewError = (e: Event) => {
   ElMessage.error('预览加载失败')
 }
 
-// 图片缩略图加载失败时的兜底处理：
-// 第一次失败：改用下载接口作为缩略图数据源（直接返回原图，由样式缩放）；
-// 第二次仍失败：隐藏图片，避免一直显示红色报错图标。
+// 图片缩略图加载失败时的简单兜底：直接隐藏该缩略图（不影响预览按钮）
 const handleImageError = (e: Event) => {
   const img = e.target as HTMLImageElement
-  const filePath = img.dataset.path
-
-  if (!currentDrive.value || !filePath) {
-    img.style.display = 'none'
-    return
-  }
-
-  // 已经尝试过兜底一次，仍失败则直接隐藏
-  if (img.dataset.fallbackTried === '1') {
-    img.style.display = 'none'
-    return
-  }
-
-  img.dataset.fallbackTried = '1'
-
-  const baseURL = getApiBaseURL()
-  const encodedPath = encodeURIComponent(filePath)
-  const encodedDriveId = encodeURIComponent(currentDrive.value.id)
-  const token = localStorage.getItem('token')
-  const tokenParam = token ? `&token=${token}` : ''
-
-  // 使用下载接口作为兜底缩略图来源
-  img.src = `${baseURL}/files/download?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`
+  img.style.display = 'none'
 }
 
 // 预览文件
