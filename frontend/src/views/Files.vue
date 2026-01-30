@@ -493,7 +493,7 @@
       <div class="preview-container">
         <img
           v-if="previewFile?.isImage && currentDrive"
-          :src="getPreviewUrlLocal(previewFile.path)"
+          :src="previewImageUrl || getPreviewUrlLocal(previewFile.path)"
           class="preview-image"
           alt="Preview"
           @error="handlePreviewError"
@@ -640,6 +640,8 @@ const uploadProgress = ref(0)
 const uploadFileList = ref<any[]>([])
 const uploadRef = ref()
 const previewFile = ref<FileItem | null>(null)
+// 预览图片的 Blob URL（优先使用下载接口生成，避免依赖 /files/preview 出错）
+const previewImageUrl = ref('')
 
 // 表单数据
 const folderForm = ref({ name: '', isLocked: false, password: '' })
@@ -1012,8 +1014,26 @@ const handleImageError = (e: Event) => {
 }
 
 // 预览文件
-const handlePreview = (file: FileItem) => {
+const handlePreview = async (file: FileItem) => {
   previewFile.value = file
+  previewImageUrl.value = ''
+
+  if (!currentDrive.value) {
+    showPreviewDialog.value = true
+    return
+  }
+
+  // 图片优先使用下载接口生成 Blob URL，稳定性更好
+  if (file.isImage) {
+    try {
+      const blob = await downloadFile(currentDrive.value.id, file.path)
+      previewImageUrl.value = URL.createObjectURL(blob)
+    } catch (error: any) {
+      console.error('图片预览下载失败:', error)
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+
   showPreviewDialog.value = true
 }
 
