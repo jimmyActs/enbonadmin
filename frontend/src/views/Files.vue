@@ -129,6 +129,7 @@
                         v-if="row.isImage && currentDrive"
                         :src="getThumbnailUrlLocal(row.path)"
                         :alt="row.name"
+                        :data-path="row.path"
                         class="thumbnail-img"
                         @error="handleImageError"
                       />
@@ -236,6 +237,7 @@
                       v-if="item.isImage && currentDrive"
                       :src="getThumbnailUrlLocal(item.path)"
                       :alt="item.name"
+                      :data-path="item.path"
                       class="file-card-img"
                       @error="handleImageError"
                     />
@@ -491,7 +493,7 @@
       <div class="preview-container">
         <img
           v-if="previewFile?.isImage && currentDrive"
-          :src="getThumbnailUrlLocal(previewFile.path)"
+          :src="getPreviewUrlLocal(previewFile.path)"
           class="preview-image"
           alt="Preview"
           @error="handlePreviewError"
@@ -585,6 +587,7 @@ import {
   unlockFolder, getPreviewUrl, getThumbnailUrl, renameDrive,
   type DriveInfo, type FileItem, type DriveGroups
 } from '../api/files'
+import { getApiBaseURL } from '../api/config'
 
 const { t, locale } = useI18n()
 
@@ -971,14 +974,41 @@ const getThumbnailUrlLocal = (filePath: string): string => {
 }
 
 // 图片加载错误处理
+// 预览大图加载失败（通常是 /files/preview 异常）
+// 这里只弹提示，不做兜底跳转，避免出现重复下载行为
 const handlePreviewError = (e: Event) => {
   console.error('预览加载失败:', e)
   ElMessage.error('预览加载失败')
 }
 
+// 图片缩略图加载失败时的兜底处理：
+// 第一次失败：改用下载接口作为缩略图数据源（直接返回原图，由样式缩放）；
+// 第二次仍失败：隐藏图片，避免一直显示红色报错图标。
 const handleImageError = (e: Event) => {
   const img = e.target as HTMLImageElement
-  img.style.display = 'none'
+  const filePath = img.dataset.path
+
+  if (!currentDrive.value || !filePath) {
+    img.style.display = 'none'
+    return
+  }
+
+  // 已经尝试过兜底一次，仍失败则直接隐藏
+  if (img.dataset.fallbackTried === '1') {
+    img.style.display = 'none'
+    return
+  }
+
+  img.dataset.fallbackTried = '1'
+
+  const baseURL = getApiBaseURL()
+  const encodedPath = encodeURIComponent(filePath)
+  const encodedDriveId = encodeURIComponent(currentDrive.value.id)
+  const token = localStorage.getItem('token')
+  const tokenParam = token ? `&token=${token}` : ''
+
+  // 使用下载接口作为兜底缩略图来源
+  img.src = `${baseURL}/files/download?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`
 }
 
 // 预览文件

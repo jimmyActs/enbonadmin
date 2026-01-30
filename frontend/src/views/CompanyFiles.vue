@@ -130,11 +130,13 @@
                 📂
               </template>
               <template v-else-if="item.isImage">
-                <!-- 图片：优先使用缩略图接口获取真实缩略图，如果失败再退回占位图标 -->
+                <!-- 图片：优先使用缩略图接口获取真实缩略图，如果失败再退回下载接口；最后才显示占位图标 -->
                 <img
                   v-if="getPreviewThumbnail(item)"
                   :src="getPreviewThumbnail(item)"
                   :alt="getDisplayName(item)"
+                  :data-path="item.path"
+                  @error="handleImageError"
                 />
                 <span v-else>🖼️</span>
               </template>
@@ -351,6 +353,7 @@ import {
   getThumbnailUrl,
   type FileItem,
 } from '../api/files'
+import { getApiBaseURL } from '../api/config'
 import { getWorkspaceStorageConfigs, type WorkspaceStorageConfig } from '../api/workspace-storage'
 import {
   getCompanyFileCategories,
@@ -1139,6 +1142,34 @@ const getPreviewThumbnail = (item: FileItem): string | null => {
   if (!item.isImage) return null
   // 使用专门的缩略图接口，路径解析与下载保持一致
   return getThumbnailUrl(driveId.value, item.path)
+}
+
+// 图片缩略图加载失败时的兜底处理：
+// 第一次失败：改用下载接口作为缩略图数据源；第二次仍失败则显示占位图标。
+const handleImageError = (e: Event) => {
+  const img = e.target as HTMLImageElement
+  const filePath = img.dataset.path
+
+  if (!filePath) {
+    img.style.display = 'none'
+    return
+  }
+
+  if (img.dataset.fallbackTried === '1') {
+    // 已经尝试过一次兜底，仍失败则直接隐藏，交给外层占位符
+    img.style.display = 'none'
+    return
+  }
+
+  img.dataset.fallbackTried = '1'
+
+  const baseURL = getApiBaseURL()
+  const encodedPath = encodeURIComponent(filePath)
+  const encodedDriveId = encodeURIComponent(driveId.value)
+  const token = localStorage.getItem('token')
+  const tokenParam = token ? `&token=${token}` : ''
+
+  img.src = `${baseURL}/files/download?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`
 }
 
 // 去掉前缀 [类型]，用于界面展示文件/文件夹名称
