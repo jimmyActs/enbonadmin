@@ -130,8 +130,13 @@
                 📂
               </template>
               <template v-else-if="item.isImage">
-                <!-- 为了避免缩略图请求 /files/preview 报 400（盘符/路径兼容问题），这里统一使用占位图标 -->
-                <span>🖼️</span>
+                <!-- 图片：优先使用缩略图接口获取真实缩略图，如果失败再退回占位图标 -->
+                <img
+                  v-if="getPreviewThumbnail(item)"
+                  :src="getPreviewThumbnail(item)"
+                  :alt="getDisplayName(item)"
+                />
+                <span v-else>🖼️</span>
               </template>
               <template v-else-if="item.isVideo">
                 🎬
