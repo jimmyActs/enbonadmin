@@ -127,7 +127,7 @@
                     <div class="thumbnail-cell">
                       <img
                         v-if="row.isImage && currentDrive"
-                        :src="getPreviewUrlLocal(row.path)"
+                        :src="getThumbnailUrlLocal(row.path)"
                         :alt="row.name"
                         class="thumbnail-img"
                         @error="handleImageError"
@@ -234,7 +234,7 @@
                   <div class="file-card-thumbnail">
                     <img
                       v-if="item.isImage && currentDrive"
-                      :src="getPreviewUrlLocal(item.path)"
+                      :src="getThumbnailUrlLocal(item.path)"
                       :alt="item.name"
                       class="file-card-img"
                       @error="handleImageError"
@@ -491,7 +491,7 @@
       <div class="preview-container">
         <img
           v-if="previewFile?.isImage && currentDrive"
-          :src="getPreviewUrlLocal(previewFile.path)"
+          :src="getThumbnailUrlLocal(previewFile.path)"
           class="preview-image"
           alt="Preview"
           @error="handlePreviewError"
@@ -582,7 +582,7 @@ import {
   getDrives, verifyDrivePassword, getFileList, createFolder,
   deleteFile, renameFile, uploadFile, downloadFile,
   generateShareLink, getShareLinks, deleteShareLink,
-  unlockFolder, getPreviewUrl, renameDrive,
+  unlockFolder, getPreviewUrl, getThumbnailUrl, renameDrive,
   type DriveInfo, type FileItem, type DriveGroups
 } from '../api/files'
 
@@ -959,10 +959,15 @@ const formatDate = (dateStr?: string): string => {
 // 获取预览URL（本地函数，调用API函数）
 const getPreviewUrlLocal = (filePath: string): string => {
   if (!currentDrive.value) return ''
-  // 确保路径正确编码
   const url = getPreviewUrl(currentDrive.value.id, filePath)
   console.log('预览URL:', url) // 调试用
   return url
+}
+
+// 获取缩略图URL（图片统一走缩略图接口，保证路径解析与下载一致）
+const getThumbnailUrlLocal = (filePath: string): string => {
+  if (!currentDrive.value) return ''
+  return getThumbnailUrl(currentDrive.value.id, filePath)
 }
 
 // 图片加载错误处理
