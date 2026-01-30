@@ -126,7 +126,7 @@
                   <template #default="{ row }">
                     <div class="thumbnail-cell">
                       <img
-                        v-if="row.isImage && currentDrive"
+                        v-if="row.isImage && currentDrive && getThumbnailSrc(row.path)"
                         :src="getThumbnailSrc(row.path)"
                         :alt="row.name"
                         class="thumbnail-img"
@@ -233,7 +233,7 @@
                 >
                   <div class="file-card-thumbnail">
                     <img
-                      v-if="item.isImage && currentDrive"
+                      v-if="item.isImage && currentDrive && getThumbnailSrc(item.path)"
                       :src="getThumbnailSrc(item.path)"
                       :alt="item.name"
                       class="file-card-img"
@@ -1007,6 +1007,10 @@ const handlePreviewError = (e: Event) => {
 // 图片缩略图加载失败时的简单兜底：直接隐藏该缩略图（不影响预览按钮）
 const handleImageError = (e: Event) => {
   const img = e.target as HTMLImageElement
+  // 如果当前 src 为空，说明是初始状态，不处理，等待真正的缩略图 URL 设置
+  if (!img.src || img.src === window.location.href) {
+    return
+  }
   img.style.display = 'none'
 }
 
