@@ -154,7 +154,9 @@ export const getThumbnailUrl = (driveId: string, path: string): string => {
   const encodedDriveId = encodeURIComponent(driveId);
   const token = localStorage.getItem('token');
   const tokenParam = token ? `&token=${token}` : '';
-  return `${baseURL}/files/thumbnail?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`;
+  // 为了避免额外的缩略图接口 404，这里直接复用下载接口作为缩略图来源。
+  // 浏览器在 <img> 中访问下载地址时，会按图片内容渲染，即便文件较大也能看到真实缩略图。
+  return `${baseURL}/files/download?driveId=${encodedDriveId}&path=${encodedPath}${tokenParam}`;
 };
 
 // 重命名盘
