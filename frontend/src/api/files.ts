@@ -83,7 +83,13 @@ export const moveFile = (driveId: string, sourcePath: string, targetPath: string
 };
 
 // 上传文件
-export const uploadFile = (driveId: string, path: string, file: File, onProgress?: (progress: number) => void): Promise<{ success: boolean; message?: string }> => {
+// 说明：上传大文件或网络较慢时，默认的 60 秒超时容易失败，这里单独把超时时间调大一些（例如 5 分钟）。
+export const uploadFile = (
+  driveId: string,
+  path: string,
+  file: File,
+  onProgress?: (progress: number) => void,
+): Promise<{ success: boolean; message?: string }> => {
   const formData = new FormData();
   formData.append('file', file);
   formData.append('driveId', driveId);
@@ -93,6 +99,8 @@ export const uploadFile = (driveId: string, path: string, file: File, onProgress
     headers: {
       'Content-Type': 'multipart/form-data',
     },
+    // 单次上传允许最长 5 分钟
+    timeout: 5 * 60 * 1000,
     onUploadProgress: (progressEvent) => {
       if (onProgress && progressEvent.total) {
         const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
