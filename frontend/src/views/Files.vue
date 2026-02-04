@@ -498,7 +498,7 @@
         />
         <video
           v-else-if="previewFile?.isVideo && currentDrive"
-          :src="getPreviewUrlLocal(previewFile.path)"
+          :src="previewVideoUrl || getPreviewUrlLocal(previewFile.path)"
           controls
           class="preview-video"
         />
@@ -638,8 +638,9 @@ const uploadProgress = ref(0)
 const uploadFileList = ref<any[]>([])
 const uploadRef = ref()
 const previewFile = ref<FileItem | null>(null)
-// 预览图片的 Blob URL（优先使用下载接口生成，避免依赖 /files/preview 出错）
+// 预览图片/视频的 Blob URL（优先使用下载接口生成，避免依赖 /files/preview 出错）
 const previewImageUrl = ref('')
+const previewVideoUrl = ref('')
 // 图片缩略图缓存：key 为文件 path，value 为 Blob URL
 const thumbnailMap = ref<Record<string, string>>({})
 const thumbnailLoading = ref<Record<string, boolean>>({})
@@ -1018,6 +1019,7 @@ const handleImageError = (e: Event) => {
 const handlePreview = async (file: FileItem) => {
   previewFile.value = file
   previewImageUrl.value = ''
+  previewVideoUrl.value = ''
 
   if (!currentDrive.value) {
     showPreviewDialog.value = true
@@ -1031,6 +1033,17 @@ const handlePreview = async (file: FileItem) => {
       previewImageUrl.value = URL.createObjectURL(blob)
     } catch (error: any) {
       console.error('图片预览下载失败:', error)
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+
+  // 视频同样使用下载接口生成 Blob URL，避免 /files/preview 在部分环境下报错或不支持 range
+  if (file.isVideo) {
+    try {
+      const blob = await downloadFile(currentDrive.value.id, file.path)
+      previewVideoUrl.value = URL.createObjectURL(blob)
+    } catch (error: any) {
+      console.error('视频预览下载失败:', error)
       ElMessage.error(error.message || t('common.error'))
     }
   }
