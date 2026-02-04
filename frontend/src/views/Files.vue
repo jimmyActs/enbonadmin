@@ -1589,14 +1589,17 @@ watch(showShareDialog, (val) => {
     min-height: 400px;
 
     .preview-image {
-      max-width: 100%;
+      max-width: 80%;
       max-height: 70vh;
       object-fit: contain;
     }
 
     .preview-video {
-      max-width: 100%;
-      max-height: 70vh;
+      max-width: 80%;
+      max-height: 60vh;
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      background: #000;
     }
 
     .preview-pdf {
