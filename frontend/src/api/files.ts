@@ -36,6 +36,9 @@ export interface FileItem {
   isVideo?: boolean;
   isPdf?: boolean;
   isText?: boolean;
+  // 后端还会返回 extension / isOffice 等字段，这里补充上，方便前端使用
+  extension?: string;
+  isOffice?: boolean;
   canPreview?: boolean;
   isLocked?: boolean;
   isOwner?: boolean;

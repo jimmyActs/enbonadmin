@@ -963,6 +963,14 @@ const formatDate = (dateStr?: string): string => {
   return new Date(dateStr).toLocaleString(getLocale())
 }
 
+// 工具：判断是否为音频文件（用于预览逻辑）
+const isAudioFile = (file: FileItem): boolean => {
+  const name = file.name || ''
+  const dotIndex = name.lastIndexOf('.')
+  const ext = dotIndex > -1 ? name.slice(dotIndex).toLowerCase() : ''
+  return ['.mp3', '.wav', '.ogg', '.m4a', '.flac'].includes(ext)
+}
+
 // 获取预览URL（本地函数，调用API函数）
 const getPreviewUrlLocal = (filePath: string): string => {
   if (!currentDrive.value) return ''
@@ -1017,38 +1025,126 @@ const handleImageError = (e: Event) => {
 
 // 预览文件
 const handlePreview = async (file: FileItem) => {
-  previewFile.value = file
-  previewImageUrl.value = ''
-  previewVideoUrl.value = ''
+  if (!currentDrive.value) return
 
-  if (!currentDrive.value) {
-    showPreviewDialog.value = true
-    return
-  }
-
-  // 图片优先使用下载接口生成 Blob URL，稳定性更好
+  // 1) 图片：在当前弹窗中预览
   if (file.isImage) {
+    previewFile.value = file
+    previewImageUrl.value = ''
+    previewVideoUrl.value = ''
     try {
       const blob = await downloadFile(currentDrive.value.id, file.path)
       previewImageUrl.value = URL.createObjectURL(blob)
     } catch (error: any) {
       console.error('图片预览下载失败:', error)
       ElMessage.error(error.message || t('common.error'))
+      return
     }
+    showPreviewDialog.value = true
+    return
   }
 
-  // 视频同样使用下载接口生成 Blob URL，避免 /files/preview 在部分环境下报错或不支持 range
+  // 2) 视频：在当前弹窗中预览
   if (file.isVideo) {
+    previewFile.value = file
+    previewImageUrl.value = ''
+    previewVideoUrl.value = ''
     try {
       const blob = await downloadFile(currentDrive.value.id, file.path)
       previewVideoUrl.value = URL.createObjectURL(blob)
     } catch (error: any) {
       console.error('视频预览下载失败:', error)
       ElMessage.error(error.message || t('common.error'))
+      return
     }
+    showPreviewDialog.value = true
+    return
   }
 
-  showPreviewDialog.value = true
+  // 3) PDF：新标签页中使用浏览器内置 PDF 查看器预览
+  if (file.isPdf) {
+    try {
+      const blob = await downloadFile(currentDrive.value.id, file.path)
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch (error: any) {
+      console.error('PDF 预览失败:', error)
+      ElMessage.error(error.message || t('common.error'))
+    }
+    return
+  }
+
+  // 4) 音频：新标签页中使用 <audio> 播放器预览
+  if (isAudioFile(file)) {
+    try {
+      const blob = await downloadFile(currentDrive.value.id, file.path)
+      const url = URL.createObjectURL(blob)
+      const win = window.open('', '_blank')
+      if (win) {
+        const title = file.name || 'Audio'
+        win.document.write(`
+          <html>
+            <head><title>${title}</title></head>
+            <body style="margin:0;background:#111;display:flex;align-items:center;justify-content:center;">
+              <audio src="${url}" controls autoplay style="width:80%;max-width:600px;"></audio>
+            </body>
+          </html>
+        `)
+        win.document.close()
+      }
+    } catch (error: any) {
+      console.error('音频预览失败:', error)
+      ElMessage.error(error.message || t('common.error'))
+    }
+    return
+  }
+
+  // 5) 文本（txt / log / csv 等）：新标签页以纯文本形式展示
+  if (file.isText) {
+    try {
+      const blob = await downloadFile(currentDrive.value.id, file.path)
+      const text = await blob.text()
+      const win = window.open('', '_blank')
+      if (win) {
+        const title = file.name || 'Text'
+        const safeText = text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+
+        win.document.write(`
+          <html>
+            <head><title>${title}</title></head>
+            <body style="margin:0;background:#111;color:#eee;font-family:monospace;">
+              <pre style="white-space:pre-wrap;padding:16px;">${safeText}</pre>
+            </body>
+          </html>
+        `)
+        win.document.close()
+      }
+    } catch (error: any) {
+      console.error('文本预览失败:', error)
+      ElMessage.error(error.message || t('common.error'))
+    }
+    return
+  }
+
+  // 6) Office 文档（Word / Excel / PPT 等）：触发浏览器下载或用本机 Office 打开
+  try {
+    const blob = await downloadFile(currentDrive.value.id, file.path)
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = file.name || 'file'
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (error: any) {
+    console.error('文件预览/下载失败:', error)
+    ElMessage.error(error.message || t('common.error'))
+  }
 }
 
 // 解锁文件夹
