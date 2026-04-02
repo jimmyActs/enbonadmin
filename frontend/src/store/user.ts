@@ -55,9 +55,10 @@ export const useUserStore = defineStore('user', {
       return codes.every((code) => state.userInfo!.permissions!.includes(code));
     },
 
-    /** 拥有任一指定权限码就返回 true */
+    /** 拥有任一指定权限码就返回 true（空数组视为无需权限，直接返回 true） */
     hasAnyPermission: (state) => (codes: string[]): boolean => {
       if (state.userInfo?.role === 'super_admin') return true;
+      if (!codes.length) return true; // 无需特定权限，全部登录用户可访问
       if (!state.userInfo?.permissions?.length) return false;
       return codes.some((code) => state.userInfo!.permissions!.includes(code));
     },

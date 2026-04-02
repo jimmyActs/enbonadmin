@@ -183,8 +183,8 @@ const canAccessCRMComputed = computed(() =>
   isSuperAdmin.value || userStore.hasAnyPermission(['crm.customer.view', 'crm.lead.view', 'crm.stats.view'])
 )
 const canAccessFilesComputed = computed(() =>
-  // 文件管理：所有登录用户可访问
-  isSuperAdmin.value || userStore.hasPermission('files.drive.view')
+  // 文件管理：所有登录用户可访问（无需特定权限）
+  isSuperAdmin.value || userStore.isLoggedIn
 )
 const canAccessSalesComputed = computed(() =>
   isSuperAdmin.value || userStore.hasAnyPermission(['crm.customer.view', 'crm.lead.view'])
