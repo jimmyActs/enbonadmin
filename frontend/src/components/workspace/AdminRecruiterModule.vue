@@ -194,6 +194,8 @@
     <el-dialog
       v-model="showTargetDialog"
       :title="$t('workspace.adminRecruiter.setTarget')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="500px"
       :close-on-click-modal="false"
     >
@@ -230,6 +232,8 @@
     <el-dialog
       v-model="showCandidateDialog"
       :title="editingCandidate ? $t('workspace.adminRecruiter.editCandidate') : $t('workspace.adminRecruiter.addCandidate')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="700px"
       :close-on-click-modal="false"
     >

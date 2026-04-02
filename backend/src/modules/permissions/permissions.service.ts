@@ -55,6 +55,29 @@ export class PermissionsService implements OnModuleInit {
       { code: 'hr.announcement.publish', name: '发布公告', module: 'hr', parentId: null },
       { code: 'hr.announcement.manage.all', name: '管理全部公告', module: 'hr', parentId: null },
       { code: 'hr.banner.manage', name: '管理首页横幅与公司文化图片', module: 'hr', parentId: null },
+      // 考勤管理
+      { code: 'hr.attendance.view', name: '查看考勤记录', module: 'hr', parentId: null },
+      { code: 'hr.attendance.edit', name: '编辑考勤记录', module: 'hr', parentId: null },
+      { code: 'hr.attendance.import', name: '导入考勤数据', module: 'hr', parentId: null },
+      { code: 'hr.attendance.export', name: '导出考勤数据', module: 'hr', parentId: null },
+      { code: 'hr.attendance.approve', name: '审批考勤异常', module: 'hr', parentId: null },
+      // 薪资管理
+      { code: 'hr.payroll.view', name: '查看薪资记录', module: 'hr', parentId: null },
+      { code: 'hr.payroll.view_sensitive', name: '查看薪资敏感数据', module: 'hr', parentId: null },
+      { code: 'hr.payroll.edit', name: '编辑薪资记录', module: 'hr', parentId: null },
+      { code: 'hr.payroll.import', name: '导入薪资数据', module: 'hr', parentId: null },
+      { code: 'hr.payroll.export', name: '导出薪资数据', module: 'hr', parentId: null },
+      { code: 'hr.payroll.approve', name: '审批薪资', module: 'hr', parentId: null },
+      // 绩效管理
+      { code: 'hr.performance.view', name: '查看绩效记录', module: 'hr', parentId: null },
+      { code: 'hr.performance.self', name: '自评绩效', module: 'hr', parentId: null },
+      { code: 'hr.performance.evaluate', name: '评定绩效', module: 'hr', parentId: null },
+      { code: 'hr.performance.approve', name: '审批绩效', module: 'hr', parentId: null },
+      // 活动策划
+      { code: 'hr.event.view', name: '查看活动', module: 'hr', parentId: null },
+      { code: 'hr.event.create', name: '创建活动', module: 'hr', parentId: null },
+      { code: 'hr.event.edit', name: '编辑活动', module: 'hr', parentId: null },
+      { code: 'hr.event.delete', name: '删除活动', module: 'hr', parentId: null },
 
       // 员工申请 & 工作汇报
       { code: 'request.material.my.create', name: '提交物料申请', module: 'request', parentId: null },
@@ -90,6 +113,26 @@ export class PermissionsService implements OnModuleInit {
       { code: 'finance.report.view.basic', name: '查看基础财务报表', module: 'finance', parentId: null },
       { code: 'finance.report.view.sensitive', name: '查看敏感财务报表', module: 'finance', parentId: null },
       { code: 'finance.exchangeRates.manage', name: '管理汇率配置', module: 'finance', parentId: null },
+
+      // CRM 客户管理
+      { code: 'crm.customer.view', name: '查看客户', module: 'crm', parentId: null },
+      { code: 'crm.customer.create', name: '新建客户', module: 'crm', parentId: null },
+      { code: 'crm.customer.edit', name: '编辑客户', module: 'crm', parentId: null },
+      { code: 'crm.customer.delete', name: '删除客户', module: 'crm', parentId: null },
+      { code: 'crm.customer.assign', name: '分配/转移客户', module: 'crm', parentId: null },
+      { code: 'crm.customer.pool', name: '公海池操作', module: 'crm', parentId: null },
+      { code: 'crm.lead.view', name: '查看商机', module: 'crm', parentId: null },
+      { code: 'crm.lead.create', name: '新建商机', module: 'crm', parentId: null },
+      { code: 'crm.lead.edit', name: '编辑商机', module: 'crm', parentId: null },
+      { code: 'crm.lead.delete', name: '删除商机', module: 'crm', parentId: null },
+      { code: 'crm.lead.assign', name: '分配商机负责人', module: 'crm', parentId: null },
+      { code: 'crm.target.view', name: '查看销售目标', module: 'crm', parentId: null },
+      { code: 'crm.target.manage', name: '管理销售目标', module: 'crm', parentId: null },
+      { code: 'crm.email.view', name: '查看邮件往来', module: 'crm', parentId: null },
+      { code: 'crm.email.send', name: '发送邮件', module: 'crm', parentId: null },
+      { code: 'crm.stats.view', name: '查看CRM统计数据', module: 'crm', parentId: null },
+      { code: 'crm.stats.team', name: '查看团队统计', module: 'crm', parentId: null },
+      { code: 'crm.inquirySource.manage', name: '管理询盘来源配置', module: 'crm', parentId: null },
     ];
 
     // === 1.1 按 code 幂等插入/更新权限 ===
@@ -181,6 +224,20 @@ export class PermissionsService implements OnModuleInit {
         isSystem: true,
         isSuperAdmin: false,
       },
+      {
+        code: 'finance_role',
+        name: '财务模板',
+        description: '财务部门人员权限集合',
+        isSystem: true,
+        isSuperAdmin: false,
+      },
+      {
+        code: 'guest_role',
+        name: '访客模板',
+        description: '访客最低权限集合',
+        isSystem: true,
+        isSuperAdmin: false,
+      },
     ];
 
     const existingRoles = await this.roleRepository.find();
@@ -262,6 +319,29 @@ export class PermissionsService implements OnModuleInit {
       'hr.banner.manage',
       'workspace.companyCulture.manage',
       'report.org.view',
+      // 考勤
+      'hr.attendance.view',
+      'hr.attendance.edit',
+      'hr.attendance.import',
+      'hr.attendance.export',
+      'hr.attendance.approve',
+      // 薪资
+      'hr.payroll.view',
+      'hr.payroll.view_sensitive',
+      'hr.payroll.edit',
+      'hr.payroll.import',
+      'hr.payroll.export',
+      'hr.payroll.approve',
+      // 绩效
+      'hr.performance.view',
+      'hr.performance.self',
+      'hr.performance.evaluate',
+      'hr.performance.approve',
+      // 活动策划
+      'hr.event.view',
+      'hr.event.create',
+      'hr.event.edit',
+      'hr.event.delete',
     ];
     hrDirectorPermCodes.forEach((code) => {
       addRolePerm('hr_director_role', code, DataScope.ORG);
@@ -273,6 +353,14 @@ export class PermissionsService implements OnModuleInit {
       'request.material.dept.approve',
       'request.material.admin.approve',
       'hr.announcement.view',
+      // 考勤
+      'hr.attendance.view',
+      'hr.attendance.edit',
+      'hr.attendance.import',
+      // 活动策划
+      'hr.event.view',
+      'hr.event.create',
+      'hr.event.edit',
     ];
     hrReceptionPermCodes.forEach((code) => {
       addRolePerm('hr_reception_role', code, DataScope.DEPARTMENT);
@@ -291,6 +379,21 @@ export class PermissionsService implements OnModuleInit {
       'files.drive.view',
       'report.my.view',
       'workgroup.view',
+      // CRM
+      'crm.customer.view',
+      'crm.customer.create',
+      'crm.customer.edit',
+      'crm.lead.view',
+      'crm.lead.create',
+      'crm.lead.edit',
+      'crm.lead.assign',
+      'crm.target.view',
+      'crm.target.manage',
+      'crm.email.view',
+      'crm.stats.view',
+      'crm.stats.team',
+      'crm.inquirySource.manage',
+      'crm.customer.pool',
     ];
     salesDeptPermCodes.forEach((code) => {
       addRolePerm('sales_dept_manager_role', code, DataScope.DEPARTMENT);
@@ -332,6 +435,27 @@ export class PermissionsService implements OnModuleInit {
     ];
     filesManagerPermCodes.forEach((code) => {
       addRolePerm('files_manager_role', code, DataScope.ORG);
+    });
+
+    // 3.10 财务模板
+    const financePermCodes = [
+      'finance.report.view.basic',
+      'finance.report.view.sensitive',
+      'finance.exchangeRates.manage',
+      'files.drive.view',
+      'files.item.view',
+    ];
+    financePermCodes.forEach((code) => {
+      addRolePerm('finance_role', code, DataScope.ORG);
+    });
+
+    // 3.11 访客模板（最低权限）
+    const guestPermCodes = [
+      'files.drive.view',
+      'files.item.view',
+    ];
+    guestPermCodes.forEach((code) => {
+      addRolePerm('guest_role', code, DataScope.SELF);
     });
 
     if (rolePermsToCreate.length > 0) {
@@ -414,6 +538,112 @@ export class PermissionsService implements OnModuleInit {
 
     const entities = this.userRoleRepository.create(newRelations);
     await this.userRoleRepository.save(entities);
+  }
+
+  /**
+   * 获取用户在某权限码上的数据范围
+   * 取该用户所有角色中该权限码对应的 DataScope 的最大值（ORG > DEPARTMENT > SELF）
+   * @param userId 用户ID
+   * @param permissionCode 权限码
+   * @returns DataScope，如果用户没有任何角色包含此权限则返回 SELF
+   */
+  async getDataScopeForPermission(userId: number, permissionCode: string): Promise<DataScope> {
+    const userRoles = await this.userRoleRepository.find({ where: { userId } });
+    if (!userRoles.length) return DataScope.SELF;
+
+    const roleIds = userRoles.map((ur) => ur.roleId);
+    const rolePerms = await this.rolePermissionRepository.find({
+      where: { roleId: In(roleIds) },
+      relations: ['permission'],
+    });
+
+    const matching = rolePerms
+      .filter((rp) => rp.permission?.code === permissionCode)
+      .map((rp) => rp.dataScope);
+
+    if (!matching.length) return DataScope.SELF;
+
+    // ORG > DEPARTMENT > SELF，取最高级别
+    if (matching.includes(DataScope.ORG)) return DataScope.ORG;
+    if (matching.includes(DataScope.DEPARTMENT)) return DataScope.DEPARTMENT;
+    return DataScope.SELF;
+  }
+
+  /**
+   * 获取用户在某权限码上的所有数据范围（可能来自多个角色）
+   * @param userId 用户ID
+   * @param permissionCode 权限码
+   * @returns DataScope[]，去重后的数据范围列表
+   */
+  async getDataScopesForPermission(
+    userId: number,
+    permissionCode: string,
+  ): Promise<DataScope[]> {
+    const userRoles = await this.userRoleRepository.find({ where: { userId } });
+    if (!userRoles.length) return [];
+
+    const roleIds = userRoles.map((ur) => ur.roleId);
+    const rolePerms = await this.rolePermissionRepository.find({
+      where: { roleId: In(roleIds) },
+      relations: ['permission'],
+    });
+
+    const scopes = rolePerms
+      .filter((rp) => rp.permission?.code === permissionCode)
+      .map((rp) => rp.dataScope);
+
+    return [...new Set(scopes)];
+  }
+
+  /**
+   * 根据角色模板自动为新用户分配默认权限（登录时触发）
+   * 在 UsersService.createUser / initDefaultUser 之后调用
+   * @param userId 用户ID
+   * @param userRole 用户的 role 字段（枚举值）
+   */
+  async autoAssignDefaultRoleByUserRole(userId: number, userRole: string): Promise<void> {
+    // 如果已经分配过角色，跳过
+    const existing = await this.userRoleRepository.find({ where: { userId } });
+    if (existing.length > 0) return;
+
+    // 角色枚举值 → 角色模板 code 映射
+    const roleMapping: Record<string, string> = {
+      super_admin: 'super_admin_role',
+      department_head: 'sales_dept_manager_role',
+      hr_director: 'hr_director_role',
+      hr_reception: 'hr_reception_role',
+      employee: 'files_readonly_role',
+      finance: 'finance_role',
+      guest: 'guest_role',
+      hr: 'hr_director_role',
+    };
+
+    const roleTemplateCode = roleMapping[userRole];
+    if (!roleTemplateCode) return;
+
+    const role = await this.roleRepository.findOne({
+      where: { code: roleTemplateCode },
+    });
+
+    if (role) {
+      await this.assignRolesToUser(userId, [role.id]);
+    }
+  }
+
+  /**
+   * 获取用户的有效权限码列表（从角色模板汇总）
+   * 用于登录时返回给前端
+   */
+  async getUserEffectivePermissions(userId: number): Promise<string[]> {
+    return this.getUserPermissions(userId);
+  }
+
+  /**
+   * 获取系统中所有权限码（用于超级管理员）
+   */
+  async getAllPermissionCodes(): Promise<string[]> {
+    const perms = await this.permissionRepository.find();
+    return perms.map((p) => p.code);
   }
 }
 

@@ -79,16 +79,16 @@
             {{ row.validUntil ? formatDate(row.validUntil) : '-' }}
           </template>
         </el-table-column>
-        <el-table-column :label="$t('common.operations')" width="200" fixed="right">
+        <el-table-column :label="$t('common.operations')" width="280" fixed="right">
           <template #default="{ row }">
+            <el-button v-if="row.status === 'draft' || row.status === 'sent'" type="success" size="small" @click="handleAccept(row)">
+              接受报价
+            </el-button>
             <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)">
               {{ $t('common.edit') }}
             </el-button>
             <el-button type="danger" size="small" :icon="Delete" @click="handleDelete(row)">
               {{ $t('common.delete') }}
-            </el-button>
-            <el-button type="success" size="small" :icon="Download" @click="handleDownload(row)">
-              {{ $t('common.download') }}
             </el-button>
           </template>
         </el-table-column>
@@ -98,6 +98,8 @@
       <el-dialog
         v-model="showQuotationDialog"
         :title="editingQuotation ? $t('sales.quotation.editQuotation') : $t('sales.quotation.addQuotation')"
+        :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+        :z-index="100000"
         width="900px"
         :close-on-click-modal="false"
       >
@@ -241,27 +243,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Document, Plus, Search, Refresh, Edit, Delete, Download } from '@element-plus/icons-vue'
 import { filterData } from '../../utils/search'
-
-interface Quotation {
-  id: number
-  quotationNumber: string
-  customerName: string
-  productName: string
-  quantity: number
-  unitPrice: number
-  totalAmount: number
-  status: 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
-  quotationDate: string
-  validUntil?: string
-  notes?: string
-  createdAt: string
-}
+import { getQuotations, createQuotation, updateQuotation, deleteQuotation, type Quotation, type QuotationQuery } from '../../api/crm'
 
 const { t, locale } = useI18n()
 
@@ -309,6 +297,30 @@ watch(() => [quotationForm.value.quantity, quotationForm.value.unitPrice], () =>
   quotationForm.value.totalAmount = quotationForm.value.quantity * quotationForm.value.unitPrice
 })
 
+// 加载报价单列表
+const loadQuotations = async () => {
+  loading.value = true
+  try {
+    const params: QuotationQuery = {}
+    if (searchText.value) params.keyword = searchText.value
+    if (statusFilter.value) params.status = statusFilter.value as any
+    const res = await getQuotations(params)
+    quotations.value = res.data
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadQuotations()
+})
+
+const reload = () => loadQuotations()
+
+defineExpose({ reload })
+
 // 筛选后的报价单列表（域内搜索，只搜索报价单数据）
 const filteredQuotations = computed(() => {
   return filterData(
@@ -320,16 +332,17 @@ const filteredQuotations = computed(() => {
 })
 
 const handleSearch = () => {
-  // 筛选逻辑已在computed中实现
+  loadQuotations()
 }
 
 const handleFilter = () => {
-  // 筛选逻辑已在computed中实现
+  loadQuotations()
 }
 
 const resetFilter = () => {
   searchText.value = ''
   statusFilter.value = ''
+  loadQuotations()
 }
 
 const formatDate = (dateStr: string): string => {
@@ -376,14 +389,33 @@ const handleDelete = async (quotation: Quotation) => {
       t('common.warning'),
       { type: 'warning' }
     )
-    const index = quotations.value.findIndex(q => q.id === quotation.id)
-    if (index !== -1) {
-      quotations.value.splice(index, 1)
-    }
+    await deleteQuotation(quotation.id)
+    await loadQuotations()
     ElMessage.success(t('common.success'))
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || t('common.error'))
+      ElMessage.error(error?.message || t('common.error'))
+    }
+  }
+}
+
+const handleAccept = async (quotation: Quotation) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定接受「${quotation.customerName}」的报价 ¥${Number(quotation.totalAmount).toLocaleString()} 吗？报价接受后将自动同步营收到当期销售目标。`,
+      '接受报价',
+      { confirmButtonText: '确认接受', cancelButtonText: '取消', type: 'success' }
+    )
+    const result = await updateQuotation(quotation.id, { status: 'accepted' }) as any
+    await loadQuotations()
+    if (result?.message) {
+      ElMessage.success({ message: result.message, duration: 5000 })
+    } else {
+      ElMessage.success('报价已接受！')
+    }
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error?.message || t('common.error'))
     }
   }
 }
@@ -400,7 +432,7 @@ const handleSave = async () => {
     await quotationFormRef.value.validate()
     saving.value = true
 
-    const quotationData: Omit<Quotation, 'id' | 'createdAt'> = {
+    const quotationData = {
       quotationNumber: quotationForm.value.quotationNumber,
       customerName: quotationForm.value.customerName,
       productName: quotationForm.value.productName,
@@ -414,25 +446,24 @@ const handleSave = async () => {
     }
 
     if (editingQuotation.value) {
-      const index = quotations.value.findIndex(q => q.id === editingQuotation.value!.id)
-      if (index !== -1) {
-        const current = quotations.value[index]
-        if (!current) return
-        quotations.value[index] = { ...quotationData, id: editingQuotation.value.id, createdAt: current.createdAt }
+      const result = await updateQuotation(editingQuotation.value.id, quotationData) as any
+      // 接受报价时，提示营收联动结果
+      if (quotationData.status === 'accepted' && result?.message) {
+        await loadQuotations()
+        ElMessage.success({ message: result.message, duration: 5000 })
+        handleCancel()
+        return
       }
     } else {
-      quotations.value.push({
-        ...quotationData,
-        id: Date.now(),
-        createdAt: new Date().toISOString(),
-      })
+      await createQuotation(quotationData)
     }
 
+    await loadQuotations()
     ElMessage.success(t('common.success'))
     handleCancel()
   } catch (error: any) {
     if (error !== false) {
-      ElMessage.error(error.message || t('common.error'))
+      ElMessage.error(error?.message || t('common.error'))
     }
   } finally {
     saving.value = false

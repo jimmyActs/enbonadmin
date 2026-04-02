@@ -7,18 +7,15 @@ import {
   Delete,
   Param,
   ParseIntPipe,
-  UseGuards,
   Req,
   Query,
 } from '@nestjs/common';
 import { AiLinksService } from './ai-links.service';
 import { CreateAiLinkDto, UpdateAiLinkDto } from './dto/ai-link.dto';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 
-@UseGuards(PermissionsGuard)
 @Controller('ai-links')
 export class AiLinksController {
   constructor(

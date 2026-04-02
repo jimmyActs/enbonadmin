@@ -6,7 +6,6 @@ import {
   Body,
   Param,
   Request,
-  UseGuards,
   ParseIntPipe,
   ForbiddenException,
   NotFoundException,

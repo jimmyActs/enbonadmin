@@ -123,6 +123,8 @@
     <el-dialog
       v-model="showPlanDialog"
       :title="editingPlan ? $t('workspace.weeklyWork.editPlan') : $t('workspace.weeklyWork.addPlan')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
     >
@@ -182,6 +184,8 @@
     <el-dialog
       v-model="showSummaryDialog"
       :title="editingSummary ? $t('workspace.weeklyWork.editSummary') : $t('workspace.weeklyWork.addSummary')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
     >

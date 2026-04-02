@@ -7,10 +7,10 @@ export default {
     workspace: 'Workspace',
     workGroup: 'Work Groups',
     files: 'File Management',
-    crm: 'Xiaoman CRM',
+    crm: 'Customer Management',
     finance: 'Kingdee Finance',
     hr: 'Human Resources',
-    sales: 'Sales Management',
+    sales: 'Sales Workspace',
     workflow: 'Smart Workflow',
     employees: 'Employee Management',
     permissions: 'Permission Center'

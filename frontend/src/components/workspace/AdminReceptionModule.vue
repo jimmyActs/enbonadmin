@@ -364,6 +364,8 @@
     <el-dialog
       v-model="showMaterialDialog"
       :title="editingMaterial ? $t('workspace.adminReception.editMaterial') : $t('workspace.adminReception.addMaterial')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
     >
@@ -430,6 +432,8 @@
     <el-dialog
       v-model="showVisitorDialog"
       :title="editingVisitor ? $t('workspace.adminReception.editVisitor') : $t('workspace.adminReception.addVisitor')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
     >
@@ -509,6 +513,8 @@
     <el-dialog
       v-model="showInventoryDialog"
       :title="$t('workspace.adminReception.inventory')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="500px"
       :close-on-click-modal="false"
     >
@@ -556,6 +562,8 @@
     <el-dialog
       v-model="showAssetDialog"
       :title="editingAsset ? $t('workspace.adminReception.editAsset') : $t('workspace.adminReception.addAsset')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
     >

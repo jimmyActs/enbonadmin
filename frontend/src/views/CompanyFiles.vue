@@ -179,7 +179,7 @@
                   v-if="canManageWorkspace"
                   class="more-dropdown"
                   trigger="click"
-                  @command="command => handleMoreCommand(command, item)"
+                  @command="(command: string) => handleMoreCommand(command, item)"
                 >
                   <span class="btn-sm btn-more">
                     <el-icon><MoreFilled /></el-icon>
@@ -203,7 +203,7 @@
                   v-if="canManageWorkspace"
                   class="more-dropdown"
                   trigger="click"
-                  @command="command => handleMoreCommand(command, item)"
+                  @command="(command: string) => handleMoreCommand(command, item)"
                 >
                   <span class="btn-sm btn-more">
                     <el-icon><MoreFilled /></el-icon>
@@ -325,13 +325,8 @@ import {
   Upload,
   UploadFilled,
   FolderAdd,
-  Folder,
   FolderOpened,
   Document,
-  Download,
-  Delete,
-  Edit,
-  List,
   Grid,
   ArrowLeft,
   MoreFilled,
@@ -348,15 +343,13 @@ import {
   deleteFile,
   renameFile,
   downloadFile,
-  getPreviewUrl,
-  getThumbnailUrl,
   type FileItem,
 } from '../api/files'
-import { getApiBaseURL } from '../api/config'
 import { getWorkspaceStorageConfigs, type WorkspaceStorageConfig } from '../api/workspace-storage'
 import {
   getCompanyFileCategories,
   getCompanyFileSeries,
+  createCompanyFileSeries,
   type CompanyFileCategory,
   type CompanyFileSeries,
 } from '../api/company-files'
@@ -617,7 +610,7 @@ const categoryConfigs = computed(() => {
 
 const activeCategoryConfig = computed<CompanyFileCategory | null>(() => {
   if (!categories.value.length) return null
-  return categories.value.find(c => c.key === activeCategory.value) || categories.value[0]
+  return categories.value.find(c => c.key === activeCategory.value) ?? categories.value[0] ?? null
 })
 
 // 当前分区 + 路径组合成实际后端路径
@@ -636,10 +629,6 @@ const pathSegments = computed(() => {
 
 // 是否在当前大类的根目录（没有进入任何子文件夹）
 const isAtCategoryRoot = computed(() => pathSegments.value.length === 0)
-
-const getPathUpToIndex = (index: number) => {
-  return pathSegments.value.slice(0, index + 1).join('/')
-}
 
 const goBack = () => {
   if (!currentPath.value) return
@@ -691,10 +680,6 @@ const loadFiles = async () => {
   }
 }
 
-const refreshFiles = () => {
-  loadFiles()
-}
-
 const handleCategoryClick = (key: string) => {
   if (activeCategory.value === key) return
   activeCategory.value = key
@@ -728,18 +713,6 @@ const navigateToPath = (path: string) => {
     aiCurrentFolderPath.value = normalized
   }
   loadFiles()
-}
-
-const handleRowDoubleClick = (row: FileItem) => {
-  if (row.isDirectory) {
-    navigateToPath(row.path)
-  }
-}
-
-const handleItemDoubleClick = (item: FileItem) => {
-  if (item.isDirectory) {
-    navigateToPath(item.path)
-  }
 }
 
 // 文件操作
@@ -942,7 +915,7 @@ const handlePreview = async (item: FileItem) => {
 }
 
 // 上传
-const handleUploadChange = (file: UploadUserFile, fileListLocal: UploadUserFile[]) => {
+const handleUploadChange = (_file: UploadUserFile, fileListLocal: UploadUserFile[]) => {
   uploadFileList.value = fileListLocal
 }
 
@@ -1056,7 +1029,6 @@ const saveAiLink = async () => {
       }
     } else {
       const created = await createAiLink({
-        id: 0 as any, // will be ignored by backend
         title: aiLinkForm.value.title,
         url: aiLinkForm.value.url,
         description: aiLinkForm.value.description || undefined,
@@ -1142,15 +1114,15 @@ const isAudioFile = (item: FileItem): boolean => {
 }
 
 // 懒加载缩略图：公司文件模块直接通过下载接口获取 Blob 并生成 URL
-const getPreviewThumbnail = (item: FileItem): string | null => {
-  if (!item.isImage) return null
+const getPreviewThumbnail = (item: FileItem): string | undefined => {
+  if (!item.isImage) return undefined
   const key = item.path
 
   if (!thumbnailMap.value[key] && !thumbnailLoading.value[key]) {
     loadThumbnail(item.path)
   }
 
-  return thumbnailMap.value[key] || null
+  return thumbnailMap.value[key]
 }
 
 const loadThumbnail = async (filePath: string) => {
@@ -1177,21 +1149,21 @@ const handleImageError = (e: Event) => {
 const getDisplayName = (item: FileItem): string => {
   if (!item.name) return ''
   const m = item.name.match(/^\[[^\]]+\]\s*(.+)$/)
-  return m ? m[1] : item.name
+  return m ? (m[1] ?? item.name) : item.name
 }
 
 // 从文件名或路径中提取类型标记：[类型] xxx
 const extractTypeFromItem = (item: FileItem): string | null => {
   // 先从名称中提取
   const nameMatch = item.name.match(/^\[(.+?)\]/)
-  if (nameMatch) return nameMatch[1]
+  if (nameMatch) return nameMatch[1] ?? null
 
   // 再从路径中查找带 [] 的段
   if (item.path) {
     const segs = item.path.split('/').filter(Boolean)
     for (const seg of segs) {
       const m = seg.match(/^\[(.+?)\]/)
-      if (m) return m[1]
+      if (m) return m[1] ?? null
     }
   }
   return null
@@ -1234,7 +1206,7 @@ const getCurrentTypeFromPath = (): string | null => {
   const firstSeg = pathSegments.value[0]
   if (!firstSeg) return null
   const match = firstSeg.match(/^\[(.+?)\]/)
-  return match ? match[1] : null
+  return match ? (match[1] ?? null) : null
 }
 
 // 确保一个类型（系列）存在：没有就创建，并同步到左侧 Tab & 后端
@@ -1355,7 +1327,7 @@ const loadCategoriesAndSeries = async () => {
     }
 
     if (!activeCategory.value && categories.value.length) {
-      activeCategory.value = categories.value[0].key
+      activeCategory.value = categories.value[0]?.key ?? ''
     }
 
     const localeIsZh = locale.value.startsWith('zh')

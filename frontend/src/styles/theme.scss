@@ -117,23 +117,85 @@ body {
   transform: translateY(-2px);
 }
 
-.el-dialog {
-  border-radius: var(--r-xl);
-  overflow: hidden;
-  box-shadow: none;
-  border: 1px solid var(--stroke);
+/* Dialog 层级结构重写：
+   - el-dialog__wrapper (portal wrapper)   → position: fixed, z-index: 20001, 完整屏幕
+   - el-overlay-dialog (dialog 外层容器)   → position: fixed, z-index: 20001, 完整屏幕
+   - el-overlay (遮罩层)                  → z-index: 20000, 纯色不透明背景，完全遮住底层
+   - el-dialog__overlay (遮罩层变体)        → 同上
+   - el-dialog (弹窗主体)                   → max-height: 90vh, overflow: unset, flex 布局
+   - el-dialog__body                       → overflow-y: auto, flex: 1, 可滚动
+*/
+.el-dialog__wrapper {
+  z-index: 99999 !important;
+  position: fixed !important;
+  inset: 0;
+  overflow: hidden !important;
+  pointer-events: auto !important;
+  transform: none !important;
 }
 
-@supports ((backdrop-filter: blur(8px)) or (-webkit-backdrop-filter: blur(8px))) {
-  .el-dialog {
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-  }
+.el-overlay-dialog {
+  position: fixed !important;
+  inset: 0;
+  z-index: 99999 !important;
+  overflow: unset !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transform: none !important;
+}
+
+.el-overlay {
+  z-index: 99998 !important;
+  position: fixed !important;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  overflow: hidden !important;
+  pointer-events: auto !important;
+  transform: none !important;
+}
+
+.el-dialog__overlay {
+  z-index: 99998 !important;
+  position: fixed !important;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  overflow: hidden !important;
+  pointer-events: auto !important;
+  transform: none !important;
+}
+
+.el-dialog {
+  position: relative !important;
+  z-index: 100000 !important;
+  max-height: 90vh !important;
+  overflow: unset !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: var(--r-xl);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+  border: 1px solid var(--stroke);
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  transform: none !important;
 }
 
 .el-dialog__header {
+  flex-shrink: 0;
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
+}
+
+.el-dialog__body {
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+.el-dialog__footer {
+  flex-shrink: 0;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
 }
 
 .el-table {

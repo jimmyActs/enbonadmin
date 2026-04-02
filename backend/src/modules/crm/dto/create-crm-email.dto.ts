@@ -1,0 +1,93 @@
+import {
+  IsString, IsOptional, IsInt, IsEnum, IsDateString, IsBoolean, IsArray
+} from 'class-validator';
+import { EmailDirection, EmailImportance } from '../entities/crm-email.entity';
+
+export class CreateCrmEmailDto {
+  @IsString()
+  messageId: string;
+
+  @IsString()
+  @IsOptional()
+  subject?: string;
+
+  @IsString()
+  @IsOptional()
+  snippet?: string;
+
+  @IsString()
+  @IsOptional()
+  fromEmail?: string;
+
+  @IsString()
+  @IsOptional()
+  fromName?: string;
+
+  @IsString()
+  @IsOptional()
+  toRecipients?: string;
+
+  @IsString()
+  @IsOptional()
+  ccRecipients?: string;
+
+  @IsString()
+  @IsOptional()
+  bodyHtml?: string;
+
+  @IsString()
+  @IsOptional()
+  bodyText?: string;
+
+  @IsString()
+  @IsOptional()
+  bodyPreview?: string;
+
+  @IsString()
+  @IsOptional()
+  attachments?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  hasAttachments?: boolean;
+
+  @IsInt()
+  @IsOptional()
+  customerId?: number;
+
+  @IsInt()
+  @IsOptional()
+  ownerId?: number;
+
+  @IsEnum(EmailDirection)
+  @IsOptional()
+  direction?: EmailDirection;
+
+  @IsEnum(EmailImportance)
+  @IsOptional()
+  importance?: EmailImportance;
+
+  @IsBoolean()
+  @IsOptional()
+  isRead?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isStarred?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isArchived?: boolean;
+
+  @IsString()
+  @IsOptional()
+  tags?: string;
+
+  @IsString()
+  @IsOptional()
+  conversationId?: string;
+
+  @IsDateString()
+  @IsOptional()
+  emailDate?: string;
+}

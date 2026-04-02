@@ -10,7 +10,6 @@ import {
   Req,
   ParseIntPipe,
   UnauthorizedException,
-  UseGuards,
 } from '@nestjs/common';
 import { EmployeesService } from './employees.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
@@ -18,10 +17,8 @@ import { Department } from '../users/entities/user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 
 @Controller('employees')
-@UseGuards(PermissionsGuard)
 export class EmployeesController {
   constructor(
     private readonly employeesService: EmployeesService,

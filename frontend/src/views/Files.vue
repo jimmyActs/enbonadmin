@@ -582,11 +582,9 @@ import {
   getDrives, verifyDrivePassword, getFileList, createFolder,
   deleteFile, renameFile, uploadFile, downloadFile,
   generateShareLink, getShareLinks, deleteShareLink,
-  unlockFolder, getPreviewUrl, getThumbnailUrl, renameDrive,
+  unlockFolder, getPreviewUrl, renameDrive,
   type DriveInfo, type FileItem, type DriveGroups
 } from '../api/files'
-import { getApiBaseURL } from '../api/config'
-
 const { t, locale } = useI18n()
 
 // 计算属性
@@ -595,24 +593,6 @@ const pathHistory = ref<string[]>([]) // 路径历史记录
 // 工具函数
 const getLocale = () => {
   return locale.value
-}
-
-// 计算剩余空间百分比（保证结果在 0~100 之间，避免进度条告警）
-const getRemainingPercent = (drive: DriveInfo): number => {
-  let percent = 100
-
-  if (drive.usedPercent !== undefined) {
-    percent = 100 - drive.usedPercent
-  } else if (drive.capacity && drive.used !== undefined) {
-    // 如果没有 usedPercent，尝试从 used 和 capacity 计算
-    percent = ((drive.capacity - drive.used) / drive.capacity) * 100
-  }
-
-  // 部分磁盘在扫描失败或权限异常时可能返回异常值，这里做一次安全夹紧
-  if (Number.isNaN(percent)) {
-    return 100
-  }
-  return Math.min(100, Math.max(0, percent))
 }
 
 // 状态管理

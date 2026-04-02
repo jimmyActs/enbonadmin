@@ -162,6 +162,8 @@
     <el-dialog
       v-model="dialogVisible"
       :title="editingDocument ? $t('workspace.personalDocs.editDocument') : $t('workspace.personalDocs.addDocument')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
     >

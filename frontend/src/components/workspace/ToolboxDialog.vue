@@ -5,6 +5,8 @@
     width="960px"
     :close-on-click-modal="true"
     class="toolbox-dialog"
+    :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+    :z-index="100000"
   >
     <div class="toolbox-layout">
       <!-- 左侧：小工具图标区 -->

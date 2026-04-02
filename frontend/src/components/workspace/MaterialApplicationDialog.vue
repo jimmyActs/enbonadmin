@@ -6,6 +6,8 @@
     :close-on-click-modal="false"
     class="material-application-dialog"
     @close="handleClose"
+    :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+    :z-index="100000"
   >
     <!-- 自定义标题区 -->
     <div class="dialog-header">

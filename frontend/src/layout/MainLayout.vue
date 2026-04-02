@@ -118,7 +118,7 @@
       <!-- 主要内容 -->
       <el-main class="main-container">
         <router-view v-slot="{ Component, route }">
-          <transition name="fade-slide" mode="out-in">
+          <transition name="fade-slide">
             <component :is="Component" :key="route.path" />
           </transition>
         </router-view>
@@ -156,14 +156,6 @@ import {
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../store/user'
 import LanguageSwitcher from '../components/LanguageSwitcher.vue'
-import { 
-  canAccessEmployeeManagement, 
-  canAccessFinance,
-  canAccessCRM,
-  canAccessFiles,
-  canAccessSales,
-  canAccessHR
-} from '../utils/permissions'
 import { sendHeartbeat } from '../api/online'
 
 const router = useRouter()
@@ -177,33 +169,32 @@ const isMobile = ref(false)
 const activeMenu = computed(() => route.path)
 const userName = computed(() => userStore.userName)
 
-// 权限控制：根据角色显示不同菜单
-const canAccessEmployeeManagementComputed = computed(() => {
-  return canAccessEmployeeManagement(userStore.userInfo)
-})
-
-const canAccessFinanceComputed = computed(() => {
-  return canAccessFinance(userStore.userInfo)
-})
-
-const canAccessCRMComputed = computed(() => {
-  return canAccessCRM(userStore.userInfo)
-})
-
-const canAccessFilesComputed = computed(() => {
-  return canAccessFiles(userStore.userInfo)
-})
-
-const canAccessSalesComputed = computed(() => {
-  return canAccessSales(userStore.userInfo)
-})
-
-const canAccessHRComputed = computed(() => {
-  return canAccessHR(userStore.userInfo)
-})
-
-// 是否为超级管理员账号（拥有权限管理中心入口）
+// 权限控制：菜单是否显示
 const isSuperAdmin = computed(() => userStore.userInfo?.role === 'super_admin')
+
+// 超级管理员 bypass 所有菜单权限检查
+const canAccessEmployeeManagementComputed = computed(() =>
+  isSuperAdmin.value || userStore.hasPermission('employee.manage.view')
+)
+const canAccessFinanceComputed = computed(() =>
+  isSuperAdmin.value || userStore.hasAnyPermission(['finance.report.view.basic', 'finance.report.view.sensitive'])
+)
+const canAccessCRMComputed = computed(() =>
+  isSuperAdmin.value || userStore.hasAnyPermission(['crm.customer.view', 'crm.lead.view', 'crm.stats.view'])
+)
+const canAccessFilesComputed = computed(() =>
+  // 文件管理：所有登录用户可访问
+  isSuperAdmin.value || userStore.hasPermission('files.drive.view')
+)
+const canAccessSalesComputed = computed(() =>
+  isSuperAdmin.value || userStore.hasAnyPermission(['crm.customer.view', 'crm.lead.view'])
+)
+const canAccessHRComputed = computed(() =>
+  isSuperAdmin.value || userStore.hasAnyPermission([
+    'hr.recruitment.board.view', 'hr.attendance.view', 'hr.payroll.view',
+    'hr.performance.view', 'hr.event.view',
+  ])
+)
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 
@@ -283,7 +274,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.78), rgba(255, 255, 255, 0.58));
   border-right: 1px solid rgba(0, 0, 0, 0.06);
   transition: width 0.3s;
-  contain: paint;
+  /* 注意：不要加 contain: paint/ layout/ strict，否则弹窗会被限制在侧边栏的 stacking context 内 */
 
   .logo {
     height: 60px;
@@ -334,7 +325,6 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  contain: paint;
 
   .header-left {
     .collapse-icon {

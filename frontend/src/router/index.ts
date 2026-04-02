@@ -3,14 +3,22 @@ import type { RouteRecordRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../store/user'
 import i18n from '../i18n'
-import {
-  canAccessEmployeeManagement,
-  canAccessHR,
-  canAccessSales,
-  canAccessFinance,
-  canAccessCRM,
-  canAccessFiles
-} from '../utils/permissions'
+
+/** 路由 → 所需权限码（任一满足即可访问，留空表示所有登录用户可访问） */
+const routePermissionMap: Record<string, string[]> = {
+  '/employees': ['employee.manage.view'],
+  '/hr': ['hr.recruitment.board.view', 'hr.attendance.view', 'hr.payroll.view', 'hr.performance.view'],
+  '/sales': ['crm.customer.view', 'crm.lead.view'],
+  '/finance': ['finance.report.view.basic'],
+  '/crm': ['crm.customer.view', 'crm.lead.view', 'crm.stats.view'],
+  '/workflow': ['system.permission.view'],
+  // 文件管理：所有登录用户可访问（留空 = 无需特定权限）
+  '/files': [],
+  '/permissions': ['system.permission.view', 'system.permission.assign'],
+  '/workspace/company-files': ['workspace.companyFiles.view'],
+  '/workspace/software-downloads': ['workspace.software.view'],
+  '/workspace/company-culture': ['workspace.companyCulture.manage', 'hr.banner.manage'],
+}
 
 const routes: Array<RouteRecordRaw> = [
   {
@@ -130,32 +138,24 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫 - 增强权限检查
+// 路由守卫 - 基于权限码检查
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('token')
   const userStore = useUserStore()
-  
-  // 登录页处理
+
   if (to.path === '/login') {
-    if (token) {
-      next('/')
-    } else {
-      next()
-    }
+    next(token ? '/' : undefined)
     return
   }
-  
-  // 检查是否登录
+
   if (!token) {
     next('/login')
     return
   }
-  
-  // 检查路由权限
+
   if (to.meta.requiresAuth) {
     let userInfo = userStore.userInfo
-    
-    // 如果用户信息未加载，尝试从localStorage加载
+
     if (!userInfo) {
       const userStr = localStorage.getItem('user')
       if (userStr) {
@@ -167,60 +167,39 @@ router.beforeEach((to, _from, next) => {
         }
       }
     }
-    
-    const currentUserInfo = userInfo
-    
-    if (!currentUserInfo) {
+
+    if (!userInfo) {
       ElMessage.warning(i18n.global.t('common.userInfoLoadFailed'))
       next('/login')
       return
     }
-    
-    // 根据路由路径检查权限
-    let hasPermission = false
-    
-    if (to.path === '/employees') {
-      hasPermission = canAccessEmployeeManagement(currentUserInfo)
-    } else if (to.path === '/hr') {
-      hasPermission = canAccessHR(currentUserInfo)
-    } else if (to.path === '/sales') {
-      hasPermission = canAccessSales(currentUserInfo)
-    } else if (to.path === '/finance') {
-      hasPermission = canAccessFinance(currentUserInfo)
-    } else if (to.path === '/crm') {
-      // 小满CRM：目前仅对超级管理员开放
-      hasPermission = canAccessCRM(currentUserInfo)
-    } else if (to.path === '/workflow') {
-      // 智能工作流：目前仅对超级管理员开放
-      hasPermission = currentUserInfo.role === 'super_admin'
-    } else if (to.path === '/files') {
-      hasPermission = canAccessFiles(currentUserInfo)
-    } else if (to.path === '/workspace/company-files') {
-      // 公司文件暂时沿用文件管理访问权限
-      hasPermission = canAccessFiles(currentUserInfo)
-    } else if (to.path === '/workspace/software-downloads') {
-      // 软件下载也沿用文件管理权限
-      hasPermission = canAccessFiles(currentUserInfo)
-    } else if (to.path === '/profile') {
-      // 个人设置所有登录用户都可以访问
-      hasPermission = true
-    } else if (to.path === '/permissions') {
-      // 权限管理中心：仅超级管理员可以访问
-      hasPermission = currentUserInfo.role === 'super_admin'
-    } else {
-      // 其他路由默认允许
-      hasPermission = true
+
+    // 超级管理员 bypass 所有路由权限检查
+    if (userInfo.role === 'super_admin') {
+      next()
+      return
     }
-    
-    if (!hasPermission) {
+
+    // 从路由权限映射表中查找该路由需要的权限
+    const requiredCodes = routePermissionMap[to.path]
+
+    // 没有配置权限要求的路由（如首页）→ 直接放行
+    if (!requiredCodes) {
+      next()
+      return
+    }
+
+    // 任一权限码满足即可访问
+    const hasAccess = userStore.hasAnyPermission(requiredCodes)
+
+    if (!hasAccess) {
       ElMessage.warning(i18n.global.t('common.noPermission'))
       next('/index')
       return
     }
   }
-  
+
   next()
 })
 
 export default router
-

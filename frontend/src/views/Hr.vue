@@ -4,6 +4,80 @@
 
     <!-- 功能模块标签页 -->
     <el-tabs v-model="activeModule" class="hr-tabs fade-in-delay-2" @tab-change="handleModuleChange">
+      <!-- 数据看板：任何人可以访问（只展示有权限看的数据） -->
+      <el-tab-pane
+        :label="$t('hr.modules.dashboard')"
+        name="dashboard"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><DataBoard /></el-icon>
+            <span>{{ $t('hr.modules.dashboard') }}</span>
+          </span>
+        </template>
+        <HrDashboard />
+      </el-tab-pane>
+
+      <!-- 考勤管理 -->
+      <el-tab-pane
+        v-if="canViewAttendance"
+        :label="$t('hr.modules.attendance')"
+        name="attendance"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Clock /></el-icon>
+            <span>{{ $t('hr.modules.attendance') }}</span>
+          </span>
+        </template>
+        <AttendanceModule />
+      </el-tab-pane>
+
+      <!-- 绩效管理 -->
+      <el-tab-pane
+        v-if="canViewPerformance"
+        :label="$t('hr.modules.performance')"
+        name="performance"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><DataLine /></el-icon>
+            <span>{{ $t('hr.modules.performance') }}</span>
+          </span>
+        </template>
+        <PerformanceModule />
+      </el-tab-pane>
+
+      <!-- 招聘管理 -->
+      <el-tab-pane
+        v-if="canViewRecruitment"
+        :label="$t('hr.modules.recruitment')"
+        name="recruitment"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><UserFilled /></el-icon>
+            <span>{{ $t('hr.modules.recruitment') }}</span>
+          </span>
+        </template>
+        <RecruitmentModule />
+      </el-tab-pane>
+
+      <!-- 薪资管理 -->
+      <el-tab-pane
+        v-if="canViewPayroll"
+        :label="$t('hr.modules.payroll')"
+        name="payroll"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Money /></el-icon>
+            <span>{{ $t('hr.modules.payroll') }}</span>
+          </span>
+        </template>
+        <PayrollModule />
+      </el-tab-pane>
+
       <!-- 行政前台 -->
       <el-tab-pane
         v-if="canAccessAdminReception"
@@ -19,24 +93,9 @@
         <AdminReceptionModule />
       </el-tab-pane>
 
-      <!-- 行政招聘 -->
-      <el-tab-pane
-        v-if="canAccessAdminRecruiter"
-        :label="$t('hr.modules.adminRecruiter')"
-        name="admin_recruiter"
-      >
-        <template #label>
-          <span class="tab-label">
-            <el-icon><UserFilled /></el-icon>
-            <span>{{ $t('hr.modules.adminRecruiter') }}</span>
-          </span>
-        </template>
-        <AdminRecruiterModule />
-      </el-tab-pane>
-
       <!-- 公告发布 -->
       <el-tab-pane
-        v-if="canAccessAnnouncement"
+        v-if="canPublishAnnouncement"
         :label="$t('hr.modules.announcement')"
         name="announcement"
       >
@@ -51,7 +110,7 @@
 
       <!-- 活动策划 -->
       <el-tab-pane
-        v-if="canAccessEventPlanning"
+        v-if="canViewEvent || canCreateEvent"
         :label="$t('hr.modules.eventPlanning')"
         name="event_planning"
       >
@@ -63,61 +122,70 @@
         </template>
         <EventPlanningModule />
       </el-tab-pane>
+
+      <!-- 导入管理 -->
+      <el-tab-pane
+        v-if="canAccessImport"
+        name="import"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Upload /></el-icon>
+            <span>导入管理</span>
+          </span>
+        </template>
+        <ImportModule />
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { OfficeBuilding, UserFilled, Document, Calendar } from '@element-plus/icons-vue'
+import { DataBoard, Clock, DataLine, UserFilled, Money, OfficeBuilding, Document, Calendar, Upload } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
-import { 
-  WorkspaceModule, 
-  canAccessWorkspaceModule,
-  canPublishAnnouncement 
-} from '../utils/permissions'
 
 // 导入模块组件
+import HrDashboard from '../components/hr/HrDashboard.vue'
+import AttendanceModule from '../components/hr/AttendanceModule.vue'
+import PerformanceModule from '../components/hr/PerformanceModule.vue'
+import RecruitmentModule from '../components/hr/RecruitmentModule.vue'
+import PayrollModule from '../components/hr/PayrollModule.vue'
 import AdminReceptionModule from '../components/workspace/AdminReceptionModule.vue'
-import AdminRecruiterModule from '../components/workspace/AdminRecruiterModule.vue'
 import AnnouncementModule from '../components/workspace/AnnouncementModule.vue'
 import EventPlanningModule from '../components/hr/EventPlanningModule.vue'
+import ImportModule from '../components/shared/ImportModule.vue'
 
 const userStore = useUserStore()
 
-// 权限检查
-const canAccessAdminReception = computed(() => {
-  return canAccessWorkspaceModule(WorkspaceModule.ADMIN_RECEPTION, userStore.userInfo)
-})
-
-const canAccessAdminRecruiter = computed(() => {
-  return canAccessWorkspaceModule(WorkspaceModule.ADMIN_RECRUITER, userStore.userInfo)
-})
-
-const canAccessAnnouncement = computed(() => {
-  return canPublishAnnouncement(userStore.userInfo)
-})
-
-const canAccessEventPlanning = computed(() => {
-  return canAccessWorkspaceModule(WorkspaceModule.ADMIN_RECEPTION, userStore.userInfo) ||
-         canAccessWorkspaceModule(WorkspaceModule.ADMIN_RECRUITER, userStore.userInfo) ||
-         canPublishAnnouncement(userStore.userInfo)
-})
+// 权限检查（基于权限码）
+const canViewDashboard = computed(() =>
+  userStore.hasAnyPermission(['hr.recruitment.board.view', 'hr.attendance.view', 'hr.performance.view', 'hr.payroll.view'])
+)
+const canViewAttendance = computed(() => userStore.hasPermission('hr.attendance.view'))
+const canEditAttendance = computed(() => userStore.hasPermission('hr.attendance.edit'))
+const canImportAttendance = computed(() => userStore.hasPermission('hr.attendance.import'))
+const canExportAttendance = computed(() => userStore.hasPermission('hr.attendance.export'))
+const canViewPerformance = computed(() => userStore.hasPermission('hr.performance.view'))
+const canEvaluatePerformance = computed(() => userStore.hasPermission('hr.performance.evaluate'))
+const canViewPayroll = computed(() => userStore.hasPermission('hr.payroll.view'))
+const canEditPayroll = computed(() => userStore.hasPermission('hr.payroll.edit'))
+const canApprovePayroll = computed(() => userStore.hasPermission('hr.payroll.approve'))
+const canViewRecruitment = computed(() => userStore.hasPermission('hr.recruitment.board.view'))
+const canEditRecruitment = computed(() => userStore.hasPermission('hr.recruitment.candidate.edit'))
+const canApproveRecruitment = computed(() => userStore.hasPermission('hr.recruitment.offer.approve'))
+const canAccessAdminReception = computed(() => userStore.hasAnyPermission(['hr.announcement.view', 'request.material.my.view']))
+const canPublishAnnouncement = computed(() => userStore.hasPermission('hr.announcement.publish'))
+const canViewEvent = computed(() => userStore.hasPermission('hr.event.view'))
+const canCreateEvent = computed(() => userStore.hasPermission('hr.event.create'))
+const canAccessImport = computed(() => userStore.hasAnyPermission(['hr.attendance.import', 'hr.payroll.import']))
 
 // 当前激活的模块
 const activeModule = ref<string>('')
 
 // 初始化：设置第一个可用模块为激活状态
 onMounted(() => {
-  if (canAccessAdminReception.value) {
-    activeModule.value = 'admin_reception'
-  } else if (canAccessAdminRecruiter.value) {
-    activeModule.value = 'admin_recruiter'
-  } else if (canAccessAnnouncement.value) {
-    activeModule.value = 'announcement'
-  } else if (canAccessEventPlanning.value) {
-    activeModule.value = 'event_planning'
-  }
+  activeModule.value = 'dashboard'
 })
 
 // 处理模块切换
@@ -188,4 +256,3 @@ const handleModuleChange = (moduleKey: string) => {
   }
 }
 </style>
-

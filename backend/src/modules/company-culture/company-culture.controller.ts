@@ -7,7 +7,6 @@ import {
   Body,
   Param,
   ParseIntPipe,
-  UseGuards,
   Request,
 } from '@nestjs/common';
 import { CompanyCultureService } from './company-culture.service';
@@ -16,10 +15,8 @@ import { CreateMemberDto, UpdateMemberDto } from './dto/member.dto';
 import { CreateAlbumDto, UpdateAlbumDto } from './dto/album.dto';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
-@UseGuards(PermissionsGuard)
 @Controller('company-culture')
 export class CompanyCultureController {
   constructor(

@@ -1,11 +1,9 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Put, UseGuards, ForbiddenException, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Put, ForbiddenException, Req } from '@nestjs/common';
 import { PermissionsService } from './permissions.service';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { JwtService } from '@nestjs/jwt';
 
 @Controller('permissions')
-@UseGuards(PermissionsGuard)
 export class PermissionsController {
   constructor(
     private readonly permissionsService: PermissionsService,

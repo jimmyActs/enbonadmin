@@ -264,7 +264,7 @@ const userPermissionGroups = computed(() => {
     if (!groups[item.module]) {
       groups[item.module] = []
     }
-    groups[item.module].push(item)
+    groups[item.module]!.push(item)
   })
 
   const moduleLabelMap: Record<string, string> = {

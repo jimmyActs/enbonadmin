@@ -803,7 +803,6 @@ import {
   Notification,
   User,
   Star,
-  Edit,
   Close,
   Plus,
   Delete,
@@ -832,7 +831,6 @@ import { getActiveAnnouncements, markAnnouncementAsRead, markAllAnnouncementsAsR
 import { getExchangeRates, updateExchangeRatesBatch, type ExchangeRate, type UpdateExchangeRateDto } from '../api/exchange-rates'
 import {
   getEnabledMotivations,
-  getMotivations,
   createMotivation,
   updateMotivation as updateMotivationAPI,
   deleteMotivation,
@@ -846,11 +844,6 @@ const userStore = useUserStore()
 
 // 获取用户名
 const userName = computed(() => userStore.userName)
-
-// 计算当前用户是否为超级管理员
-const isSuperAdmin = computed(() => {
-  return userStore.userInfo?.role === 'super_admin'
-})
 
 // 汇率相关状态
 const exchangeRates = ref<ExchangeRate[]>([])
@@ -1420,18 +1413,6 @@ const handleImageError = (event: any) => {
   // event.target.style.display = 'none'
 }
 
-// 打开编辑对话框
-const handleOpenEditMotivationDialog = async () => {
-  try {
-    // 获取所有数据（包括未启用的），用于编辑
-    const motivations = await getMotivations()
-    editableMotivations.value = motivations.map(m => ({ ...m }))
-    showEditMotivationDialog.value = true
-  } catch (error: any) {
-    ElMessage.error(error.message || t('common.error'))
-  }
-}
-
 // 添加名言
 const handleAddMotivation = () => {
   editableMotivations.value.push({
@@ -1572,12 +1553,6 @@ type ClockDom = {
 
 const clockDoms: Array<ClockDom | null> = []
 
-// 设置时钟引用的函数
-const setClockRef = (el: HTMLElement | null, index: number) => {
-  if (!el) return
-  clockRefs.value[index] = el
-}
-
 // 获取货币符号/图标
 const getCurrencySymbol = (currency: string): string => {
   const symbols: Record<string, string> = {
@@ -1641,25 +1616,6 @@ const formatUpdateTime = (timeStr: string): string => {
   const minutes = String(time.getMinutes()).padStart(2, '0')
   
   return `${year}年${month}月${day}日${hours}点${minutes}分`
-}
-
-// 打开编辑对话框
-const handleOpenEditDialog = () => {
-  // 如果已有汇率数据，使用现有数据；否则使用默认值
-  if (exchangeRates.value && exchangeRates.value.length > 0) {
-    editableRates.value = exchangeRates.value.map(rate => ({
-      currency: rate.currency,
-      rate: typeof rate.rate === 'number' ? rate.rate : parseFloat(rate.rate as any)
-    }))
-  } else {
-    // 如果没有数据，使用默认货币列表
-    const defaultCurrencies = ['USD', 'EUR', 'GBP', 'JPY']
-    editableRates.value = defaultCurrencies.map(currency => ({
-      currency: currency,
-      rate: 0
-    }))
-  }
-  showEditDialog.value = true
 }
 
 // 保存汇率

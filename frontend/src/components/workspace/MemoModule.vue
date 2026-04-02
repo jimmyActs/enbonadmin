@@ -84,6 +84,8 @@
     <el-dialog
       v-model="showAddDialog"
       :title="editingMemo ? $t('workspace.memo.editMemo') : $t('workspace.memo.addMemo')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
       class="memo-dialog"
@@ -249,7 +251,7 @@ const filteredMemos = computed(() => {
 })
 
 // 格式化提醒时间
-const formatReminderTime = (time: string, type?: string): string => {
+const formatReminderTime = (time: string, type?: string | null): string => {
   if (type === 'daily') {
     return t('workspace.memo.reminderTypes.daily') + ' ' + new Date(time).toLocaleTimeString('zh-CN', {
       hour: '2-digit',

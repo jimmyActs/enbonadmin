@@ -10,17 +10,14 @@ import {
   ParseIntPipe,
   UnauthorizedException,
   ForbiddenException,
-  UseGuards,
 } from '@nestjs/common';
 import { AnnouncementsService } from './announcements.service';
 import { CreateAnnouncementDto } from './dto/create-announcement.dto';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { UserRole, Department } from '../users/entities/user.entity';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
-@UseGuards(PermissionsGuard)
 @Controller('announcements')
 export class AnnouncementsController {
   constructor(

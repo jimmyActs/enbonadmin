@@ -14,7 +14,6 @@ import {
   ParseFilePipe,
   MaxFileSizeValidator,
   FileTypeValidator,
-  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { MotivationsService } from './motivations.service';
@@ -23,12 +22,10 @@ import { CreateBannerImageDto, UpdateBannerImageDto } from './dto/create-banner-
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { WorkspaceStorageService } from '../workspace-storage/workspace-storage.service';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 
-@UseGuards(PermissionsGuard)
 @Controller('motivations')
 export class MotivationsController {
   constructor(

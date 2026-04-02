@@ -662,7 +662,7 @@ const saveMember = async () => {
         title: memberForm.value.title,
         tag: memberForm.value.tag,
         avatar: memberForm.value.avatar,
-        sortOrder: members.value.length ? (members.value[members.value.length - 1].sortOrder || 0) + 10 : 10,
+        sortOrder: members.value.length ? ((members.value[members.value.length - 1]?.sortOrder) || 0) + 10 : 10,
       }
       const created = await createCultureMember(payload)
       members.value.push({

@@ -263,8 +263,6 @@ const savingFolder = ref(false)
 const showUploadDialog = ref(false)
 const uploadFileList = ref<UploadUserFile[]>([])
 const uploading = ref(false)
-const selectedSeriesForUpload = ref('')
-const selectedSeriesForFolder = ref('')
 
 // 顶部展示用的分类卡片
 const categoryConfigs = computed(() => {
@@ -325,8 +323,6 @@ const pathSegments = computed(() => {
   if (!currentPath.value) return []
   return currentPath.value.split('/').filter(Boolean)
 })
-
-const isAtCategoryRoot = computed(() => pathSegments.value.length === 0)
 
 const goBack = () => {
   if (!currentPath.value) return

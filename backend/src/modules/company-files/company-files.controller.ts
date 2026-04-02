@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseIntPipe, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, ParseIntPipe, Req } from '@nestjs/common';
 import { CompanyFilesService } from './company-files.service';
 import {
   CreateCompanyFileCategoryDto,
@@ -8,13 +8,11 @@ import {
   CreateCompanyFileSeriesDto,
   UpdateCompanyFileSeriesDto,
 } from './dto/create-series.dto';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import type { Request } from 'express';
 
-@UseGuards(PermissionsGuard)
 @Controller('company-files')
 export class CompanyFilesController {
   constructor(

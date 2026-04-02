@@ -1,12 +1,10 @@
-import { Controller, Get, Put, Body, Req, UnauthorizedException, ForbiddenException, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Body, Req, UnauthorizedException, ForbiddenException } from '@nestjs/common';
 import { ExchangeRatesService } from './exchange-rates.service';
 import { UpdateExchangeRateDto } from './dto/update-exchange-rate.dto';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
-@UseGuards(PermissionsGuard)
 @Controller('exchange-rates')
 export class ExchangeRatesController {
   constructor(

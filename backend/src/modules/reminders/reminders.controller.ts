@@ -8,7 +8,6 @@ import {
   Param,
   Req,
   ParseIntPipe,
-  UseGuards,
   UnauthorizedException,
 } from '@nestjs/common';
 import { RemindersService } from './reminders.service';

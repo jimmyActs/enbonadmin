@@ -13,23 +13,30 @@
         </div>
       </template>
 
-      <el-table :data="targets" stripe v-loading="loading">
-        <el-table-column prop="period" :label="$t('sales.targets.period')" width="150" />
+      <el-table :data="targets" stripe v-loading="loading" row-key="id">
+        <el-table-column :label="$t('sales.targets.periodDate')" width="180">
+          <template #default="{ row }">{{ periodDisplay(row) }}</template>
+        </el-table-column>
+        <el-table-column prop="period" :label="$t('sales.targets.period')" width="120">
+          <template #default="{ row }">
+            <el-tag size="small">{{ getPeriodLabel(row.period) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column prop="targetAmount" :label="$t('sales.targets.targetAmount')" width="150">
           <template #default="{ row }">
             ¥{{ row.targetAmount?.toLocaleString() || '0' }}
           </template>
         </el-table-column>
-        <el-table-column prop="actualAmount" :label="$t('sales.targets.actualAmount')" width="150">
+        <el-table-column prop="achievedAmount" label="实际完成" width="150">
           <template #default="{ row }">
-            ¥{{ row.actualAmount?.toLocaleString() || '0' }}
+            ¥{{ row.achievedAmount?.toLocaleString() || '0' }}
           </template>
         </el-table-column>
         <el-table-column prop="completionRate" :label="$t('sales.targets.completionRate')" width="120">
           <template #default="{ row }">
             <el-progress
-              :percentage="row.completionRate"
-              :color="getProgressColor(row.completionRate)"
+              :percentage="Math.round(row.completionRate || 0)"
+              :color="getProgressColor(row.completionRate || 0)"
             />
           </template>
         </el-table-column>
@@ -52,6 +59,8 @@
       <el-dialog
         v-model="showTargetDialog"
         :title="editingTarget ? $t('sales.targets.editTarget') : $t('sales.targets.addTarget')"
+        :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+        :z-index="100000"
         width="700px"
         :close-on-click-modal="false"
       >
@@ -59,67 +68,91 @@
           ref="targetFormRef"
           :model="targetForm"
           :rules="targetRules"
-          label-width="120px"
+          label-width="130px"
         >
-          <el-form-item :label="$t('sales.targets.period')" prop="period">
-            <el-select
-              v-model="targetForm.period"
-              :placeholder="$t('sales.targets.periodPlaceholder')"
-              style="width: 100%"
-            >
-              <el-option :label="$t('sales.targets.monthly')" value="monthly" />
-              <el-option :label="$t('sales.targets.quarterly')" value="quarterly" />
-              <el-option :label="$t('sales.targets.yearly')" value="yearly" />
-            </el-select>
-          </el-form-item>
+          <el-row :gutter="20">
+            <el-col :span="8">
+              <el-form-item :label="$t('sales.targets.period')" prop="period">
+                <el-select
+                  v-model="targetForm.period"
+                  :placeholder="$t('sales.targets.periodPlaceholder')"
+                  style="width: 100%"
+                >
+                  <el-option :label="$t('sales.targets.monthly')" value="monthly" />
+                  <el-option :label="$t('sales.targets.quarterly')" value="quarterly" />
+                  <el-option :label="$t('sales.targets.yearly')" value="yearly" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item :label="$t('sales.targets.year')" prop="year">
+                <el-date-picker
+                  v-model="targetForm.year"
+                  type="year"
+                  value-format="YYYY"
+                  style="width: 100%"
+                  :placeholder="$t('sales.targets.yearPlaceholder')"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="8">
+              <el-form-item
+                :label="targetForm.period === 'monthly' ? $t('sales.targets.month') : $t('sales.targets.quarter')"
+                :prop="targetForm.period === 'monthly' ? 'month' : 'quarter'"
+                v-if="targetForm.period !== 'yearly'"
+              >
+                <el-select
+                  v-if="targetForm.period === 'monthly'"
+                  v-model="targetForm.month"
+                  style="width: 100%"
+                >
+                  <el-option
+                    v-for="m in 12"
+                    :key="m"
+                    :label="`${m}月`"
+                    :value="m"
+                  />
+                </el-select>
+                <el-select
+                  v-else
+                  v-model="targetForm.quarter"
+                  style="width: 100%"
+                >
+                  <el-option label="Q1" :value="1" />
+                  <el-option label="Q2" :value="2" />
+                  <el-option label="Q3" :value="3" />
+                  <el-option label="Q4" :value="4" />
+                </el-select>
+              </el-form-item>
+              <el-form-item v-else label=" "></el-form-item>
+            </el-col>
+          </el-row>
 
-          <el-form-item :label="$t('sales.targets.date')" prop="date">
-            <el-date-picker
-              v-model="targetForm.date"
-              type="month"
-              :placeholder="$t('sales.targets.datePlaceholder')"
-              value-format="YYYY-MM"
-              style="width: 100%"
-              v-if="targetForm.period === 'monthly'"
-            />
-            <el-date-picker
-              v-model="targetForm.date"
-              type="quarter"
-              :placeholder="$t('sales.targets.datePlaceholder')"
-              value-format="YYYY-Q"
-              style="width: 100%"
-              v-if="targetForm.period === 'quarterly'"
-            />
-            <el-date-picker
-              v-model="targetForm.date"
-              type="year"
-              :placeholder="$t('sales.targets.datePlaceholder')"
-              value-format="YYYY"
-              style="width: 100%"
-              v-if="targetForm.period === 'yearly'"
-            />
-          </el-form-item>
-
-          <el-form-item :label="$t('sales.targets.targetAmount')" prop="targetAmount">
-            <el-input-number
-              v-model="targetForm.targetAmount"
-              :min="0"
-              :precision="2"
-              style="width: 100%"
-              :placeholder="$t('sales.targets.targetAmountPlaceholder')"
-            >
-              <template #prefix>¥</template>
-            </el-input-number>
-          </el-form-item>
-
-          <el-form-item :label="$t('sales.targets.targetCustomers')" prop="targetCustomers">
-            <el-input-number
-              v-model="targetForm.targetCustomers"
-              :min="0"
-              style="width: 100%"
-              :placeholder="$t('sales.targets.targetCustomersPlaceholder')"
-            />
-          </el-form-item>
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item :label="$t('sales.targets.targetAmount')" prop="targetAmount">
+                <el-input-number
+                  v-model="targetForm.targetAmount"
+                  :min="0"
+                  :precision="2"
+                  style="width: 100%"
+                  :placeholder="$t('sales.targets.targetAmountPlaceholder')"
+                >
+                  <template #prefix>¥</template>
+                </el-input-number>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item :label="$t('sales.targets.targetCustomers')" prop="targetCustomers">
+                <el-input-number
+                  v-model="targetForm.targetCustomers"
+                  :min="0"
+                  style="width: 100%"
+                  :placeholder="$t('sales.targets.targetCustomersPlaceholder')"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
 
           <el-form-item :label="$t('sales.targets.description')">
             <el-input
@@ -143,47 +176,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { Aim, Plus, Edit, Delete } from '@element-plus/icons-vue'
-
-interface Target {
-  id: number
-  period: 'monthly' | 'quarterly' | 'yearly'
-  date: string
-  targetAmount: number
-  actualAmount: number
-  completionRate: number
-  targetCustomers: number
-  actualCustomers: number
-  description?: string
-  createdAt: string
-}
+import { getSalesTargets, createSalesTarget, updateSalesTarget, deleteSalesTarget } from '../../api/crm'
+import type { CrmSalesTarget } from '../../api/crm'
 
 const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
-const targets = ref<Target[]>([])
+const targets = ref<CrmSalesTarget[]>([])
 const showTargetDialog = ref(false)
-const editingTarget = ref<Target | null>(null)
+const editingTarget = ref<CrmSalesTarget | null>(null)
 const targetFormRef = ref<FormInstance>()
 
 const targetForm = ref({
-  period: 'monthly' as Target['period'],
-  date: '',
+  period: 'monthly' as CrmSalesTarget['period'],
+  year: new Date().getFullYear(),
+  month: new Date().getMonth() + 1,
+  quarter: Math.ceil((new Date().getMonth() + 1) / 3),
   targetAmount: 0,
+  targetRevenue: 0,
   targetCustomers: 0,
   description: '',
 })
 
 const targetRules: FormRules = {
   period: [{ required: true, message: t('sales.targets.periodRequired'), trigger: 'change' }],
-  date: [{ required: true, message: t('sales.targets.dateRequired'), trigger: 'change' }],
+  year: [{ required: true, message: t('sales.targets.yearRequired'), trigger: 'blur' }],
   targetAmount: [{ required: true, message: t('sales.targets.targetAmountRequired'), trigger: 'blur' }],
   targetCustomers: [{ required: true, message: t('sales.targets.targetCustomersRequired'), trigger: 'blur' }],
+}
+
+// 显示用：把后端字段 year/month/quarter 格式化为可读字符串
+const periodDisplay = (row: CrmSalesTarget) => {
+  const year = row.year ?? new Date().getFullYear()
+  if (row.period === 'monthly') return `${year}-${String(row.month || 1).padStart(2, '0')}`
+  if (row.period === 'quarterly') return `${year}-Q${row.quarter || 1}`
+  if (row.period === 'yearly') return String(year)
+  return row.period || '-'
 }
 
 const getProgressColor = (percentage: number): string => {
@@ -193,33 +227,64 @@ const getProgressColor = (percentage: number): string => {
   return '#f56c6c'
 }
 
-const handleEdit = (target: Target) => {
+const getPeriodLabel = (p: string) => {
+  const map: Record<string, string> = {
+    monthly: t('sales.targets.monthly'),
+    quarterly: t('sales.targets.quarterly'),
+    yearly: t('sales.targets.yearly'),
+  }
+  return map[p] || p
+}
+
+// 加载目标列表
+const loadTargets = async () => {
+  loading.value = true
+  try {
+    const res = await getSalesTargets()
+    targets.value = res.data
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadTargets()
+})
+
+const reload = () => loadTargets()
+
+defineExpose({ reload })
+
+const handleEdit = (target: CrmSalesTarget) => {
   editingTarget.value = target
   targetForm.value = {
     period: target.period,
-    date: target.date,
+    year: target.year,
+    month: target.month || new Date().getMonth() + 1,
+    quarter: target.quarter || Math.ceil((new Date().getMonth() + 1) / 3),
     targetAmount: target.targetAmount,
+    targetRevenue: target.targetRevenue || 0,
     targetCustomers: target.targetCustomers,
     description: target.description || '',
   }
   showTargetDialog.value = true
 }
 
-const handleDelete = async (target: Target) => {
+const handleDelete = async (target: CrmSalesTarget) => {
   try {
     await ElMessageBox.confirm(
-      t('sales.targets.deleteConfirm', { period: target.date }),
+      t('sales.targets.deleteConfirm', { period: periodDisplay(target) }),
       t('common.warning'),
       { type: 'warning' }
     )
-    const index = targets.value.findIndex(t => t.id === target.id)
-    if (index !== -1) {
-      targets.value.splice(index, 1)
-    }
+    await deleteSalesTarget(target.id)
+    await loadTargets()
     ElMessage.success(t('common.success'))
   } catch (error: any) {
     if (error !== 'cancel') {
-      ElMessage.error(error.message || t('common.error'))
+      ElMessage.error(error?.message || t('common.error'))
     }
   }
 }
@@ -231,44 +296,29 @@ const handleSave = async () => {
     await targetFormRef.value.validate()
     saving.value = true
 
-    // 计算完成率（这里需要根据实际数据计算）
-    const actualAmount = 0 // TODO: 从实际数据获取
-    const actualCustomers = 0 // TODO: 从实际数据获取
-    const completionRate = targetForm.value.targetAmount > 0
-      ? Math.round((actualAmount / targetForm.value.targetAmount) * 100)
-      : 0
-
-    const targetData: Omit<Target, 'id' | 'createdAt'> = {
+    const targetData: any = {
       period: targetForm.value.period,
-      date: targetForm.value.date,
+      year: typeof targetForm.value.year === 'string' ? parseInt(targetForm.value.year) : targetForm.value.year,
+      month: targetForm.value.period === 'monthly' ? targetForm.value.month : undefined,
+      quarter: targetForm.value.period === 'quarterly' ? targetForm.value.quarter : undefined,
       targetAmount: targetForm.value.targetAmount,
-      actualAmount,
-      completionRate,
+      targetRevenue: targetForm.value.targetRevenue,
       targetCustomers: targetForm.value.targetCustomers,
-      actualCustomers,
       description: targetForm.value.description,
     }
 
     if (editingTarget.value) {
-      const index = targets.value.findIndex(t => t.id === editingTarget.value!.id)
-      if (index !== -1) {
-        const current = targets.value[index]
-        if (!current) return
-        targets.value[index] = { ...targetData, id: editingTarget.value.id, createdAt: current.createdAt }
-      }
+      await updateSalesTarget(editingTarget.value.id, targetData)
     } else {
-      targets.value.push({
-        ...targetData,
-        id: Date.now(),
-        createdAt: new Date().toISOString(),
-      })
+      await createSalesTarget(targetData)
     }
 
+    await loadTargets()
     ElMessage.success(t('common.success'))
     handleCancel()
   } catch (error: any) {
     if (error !== false) {
-      ElMessage.error(error.message || t('common.error'))
+      ElMessage.error(error?.message || t('common.error'))
     }
   } finally {
     saving.value = false
@@ -279,13 +329,6 @@ const handleCancel = () => {
   showTargetDialog.value = false
   editingTarget.value = null
   targetFormRef.value?.resetFields()
-  targetForm.value = {
-    period: 'monthly',
-    date: '',
-    targetAmount: 0,
-    targetCustomers: 0,
-    description: '',
-  }
 }
 </script>
 

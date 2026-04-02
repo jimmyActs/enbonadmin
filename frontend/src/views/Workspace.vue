@@ -237,7 +237,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { ElMessage } from 'element-plus'
 import { useRouter, useRoute } from 'vue-router'
 import { getMyApplications } from '../api/material-applications'
 import type { MaterialApplication } from '../api/material-applications'

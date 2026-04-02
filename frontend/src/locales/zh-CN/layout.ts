@@ -7,10 +7,10 @@ export default {
     workspace: '工作空间',
     workGroup: '工作群组',
     files: '文件管理',
-    crm: '小满CRM',
+    crm: '客户管理',
     finance: '金蝶财务',
     hr: '人力资源部',
-    sales: '销售管理',
+    sales: '销售工作台',
     workflow: '智能工作流',
     employees: '人员管理',
     permissions: '权限管理'

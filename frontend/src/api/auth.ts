@@ -15,6 +15,8 @@ export interface LoginResponse {
     role: string;
     department: string | null;
     email: string;
+    /** 权限码列表，如 ['hr.payroll.view', 'hr.payroll.edit'] */
+    permissions?: string[];
   };
 }
 
@@ -33,4 +35,3 @@ export const logout = (): Promise<void> => {
   localStorage.removeItem('user');
   return Promise.resolve();
 };
-

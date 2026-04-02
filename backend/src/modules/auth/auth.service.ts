@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
+import { PermissionsService } from '../permissions/permissions.service';
 import { LoginDto } from './dto/login.dto';
 import { User } from '../users/entities/user.entity';
 
@@ -15,6 +16,7 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly permissionsService: PermissionsService,
   ) {}
 
   /**
@@ -22,7 +24,7 @@ export class AuthService {
    */
   async login(loginDto: LoginDto) {
     const user = await this.usersService.findByUsername(loginDto.username);
-    
+
     if (!user) {
       throw new UnauthorizedException('用户名或密码错误');
     }
@@ -44,6 +46,12 @@ export class AuthService {
     user.lastLoginAt = new Date();
     await this.usersService.update(user.id, { lastLoginAt: user.lastLoginAt });
 
+    // 如果用户还没有分配任何角色，自动根据其 role 字段分配对应的角色模板
+    await this.permissionsService.autoAssignDefaultRoleByUserRole(user.id, user.role);
+
+    // 获取该用户的实际权限码列表（合并所有角色模板的权限）
+    const permissions = await this.permissionsService.getUserEffectivePermissions(user.id);
+
     const payload: JwtPayload = {
       sub: user.id,
       username: user.username,
@@ -62,6 +70,7 @@ export class AuthService {
         role: user.role,
         department: user.department,
         email: user.email,
+        permissions, // 前端权限码列表，用于 v-if="hasPermission('xxx')"
       },
     };
   }

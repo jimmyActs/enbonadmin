@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { login } from '../api/auth';
 import type { LoginRequest, LoginResponse } from '../api/auth';
-import { getMyPermissions } from '../api/permissions';
 
 interface UserInfo {
   id: number;
@@ -10,20 +9,20 @@ interface UserInfo {
   role: string;
   department: string | null;
   email: string;
+  /** 权限码列表 */
+  permissions?: string[];
 }
 
 interface UserState {
   token: string | null;
   userInfo: UserInfo | null;
-  permissions: string[];
 }
 
 function safeJsonParse<T>(value: string | null): T | null {
   if (!value) return null;
   try {
     return JSON.parse(value) as T;
-  } catch (e) {
-    console.warn('localStorage JSON解析失败，已忽略该值:', e);
+  } catch {
     return null;
   }
 }
@@ -32,53 +31,56 @@ export const useUserStore = defineStore('user', {
   state: (): UserState => ({
     token: localStorage.getItem('token'),
     userInfo: safeJsonParse<UserInfo>(localStorage.getItem('user')),
-    permissions: [],
   }),
 
   getters: {
     isLoggedIn: (state) => !!state.token,
     userName: (state) => state.userInfo?.nickname || state.userInfo?.username || '用户',
-    hasPermission: (state) => (code: string) => state.permissions.includes(code),
+
+    /** 是否为超级管理员 */
+    isSuperAdmin: (state) => state.userInfo?.role === 'super_admin',
+
+    /** 单一权限码检查 */
+    hasPermission: (state) => (code: string): boolean => {
+      // 超级管理员拥有所有权限
+      if (state.userInfo?.role === 'super_admin') return true;
+      if (!state.userInfo?.permissions?.length) return false;
+      return state.userInfo.permissions.includes(code);
+    },
+
+    /** 拥有所有指定权限码才返回 true */
+    hasAllPermissions: (state) => (codes: string[]): boolean => {
+      if (state.userInfo?.role === 'super_admin') return true;
+      if (!state.userInfo?.permissions?.length) return false;
+      return codes.every((code) => state.userInfo!.permissions!.includes(code));
+    },
+
+    /** 拥有任一指定权限码就返回 true */
+    hasAnyPermission: (state) => (codes: string[]): boolean => {
+      if (state.userInfo?.role === 'super_admin') return true;
+      if (!state.userInfo?.permissions?.length) return false;
+      return codes.some((code) => state.userInfo!.permissions!.includes(code));
+    },
+
+    /** 权限码列表（直接暴露） */
+    permissions: (state): string[] => state.userInfo?.permissions || [],
   },
 
   actions: {
     async login(loginData: LoginRequest) {
-      try {
-        const response: LoginResponse = await login(loginData);
-        this.token = response.access_token;
-        this.userInfo = response.user;
-
-        // 保存到localStorage
-        localStorage.setItem('token', this.token);
-        localStorage.setItem('user', JSON.stringify(this.userInfo));
-
-         // 登录成功后加载当前用户的权限点（仅用于前端按钮显示控制，真正校验仍由后端完成）
-         await this.loadPermissions();
-
-        return response;
-      } catch (error) {
-        console.error('登录失败:', error);
-        throw error;
-      }
-    },
-
-    async loadPermissions() {
-      if (!this.userInfo) return;
-      try {
-        const res = await getMyPermissions();
-        this.permissions = res.permissions || [];
-      } catch (e) {
-        console.warn('加载权限失败，已忽略，仅影响前端按钮显示:', e);
-      }
+      const response: LoginResponse = await login(loginData);
+      this.token = response.access_token;
+      this.userInfo = response.user;
+      localStorage.setItem('token', this.token);
+      localStorage.setItem('user', JSON.stringify(this.userInfo));
+      return response;
     },
 
     logout() {
       this.token = null;
       this.userInfo = null;
-      this.permissions = [];
       localStorage.removeItem('token');
       localStorage.removeItem('user');
     },
   },
 });
-

@@ -1,9 +1,7 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Put } from '@nestjs/common';
 import { WorkspaceStorageService } from './workspace-storage.service';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
-@UseGuards(PermissionsGuard)
 @Controller('workspace-storage')
 export class WorkspaceStorageController {
   constructor(private readonly service: WorkspaceStorageService) {}

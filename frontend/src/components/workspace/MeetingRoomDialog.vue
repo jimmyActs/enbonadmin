@@ -6,6 +6,8 @@
     :close-on-click-modal="false"
     class="meeting-room-dialog"
     @close="handleClose"
+    :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+    :z-index="100000"
   >
     <!-- 会议室状态展示 -->
     <div class="meeting-rooms-status">

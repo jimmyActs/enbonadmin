@@ -235,6 +235,8 @@
     <el-dialog
       v-model="bannerDialogVisible"
       :title="bannerDialogTitle"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
       width="600px"
       :close-on-click-modal="false"
     >

@@ -17,7 +17,6 @@ import {
   NotFoundException,
   ForbiddenException,
   BadRequestException,
-  UseGuards,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import type { Request, Response } from 'express';
@@ -36,10 +35,8 @@ import {
   LockFolderDto,
   UnlockFolderDto,
 } from './dto/file-operations.dto';
-import { PermissionsGuard } from '../../common/guards/permissions.guard';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
-@UseGuards(PermissionsGuard)
 @Controller('files')
 export class FilesController {
   constructor(

@@ -515,7 +515,7 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
-import { OfficeBuilding, More, Bell, Location, Clock, VideoCamera, CircleCheck, CircleClose, UserFilled, User, ChatDotRound, Promotion, Search } from '@element-plus/icons-vue'
+import { OfficeBuilding, More, Bell, Location, Clock, VideoCamera, CircleCheck, CircleClose, UserFilled, User, Promotion, Search } from '@element-plus/icons-vue'
 import { getEmployeesGrouped, getEmployeeStatistics, type Employee } from '../api/employees'
 import { createReminder, type CreateReminderDto } from '../api/reminders'
 import { getAvatarUrl as getEmployeeAvatarUrl } from '../api/users'
@@ -741,25 +741,26 @@ const filteredDepartments = computed(() => {
 // 获取工作状态类型（用于标签颜色，支持出差/驻外目的地）
 const getWorkStatusType = (status: string): string => {
   // 处理带目的地的状态（可能包含目的地）
-  const baseStatus = status.includes(':') ? status.split(':')[0] : status
-  
+  const parts = status.split(':')
+  const baseStatus = parts[0] ?? status
+
   const statusMap: Record<string, string> = {
-  available: 'success', // 空闲 - 绿色
-  busy: 'warning', // 忙碌 - 橙色
-  away: 'primary', // 出差 - 蓝色
-  overseas: 'primary', // 驻外 - 蓝色
-  leave: 'info', // 请假 - 灰色
-  meeting: 'warning', // 会议中 - 橙色
-  offline: 'danger', // 离线 - 红色
+    available: 'success', // 空闲 - 绿色
+    busy: 'warning', // 忙碌 - 橙色
+    away: 'primary', // 出差 - 蓝色
+    overseas: 'primary', // 驻外 - 蓝色
+    leave: 'info', // 请假 - 灰色
+    meeting: 'warning', // 会议中 - 橙色
+    offline: 'danger', // 离线 - 红色
   }
-  return statusMap[baseStatus] || 'info'
+  return statusMap[baseStatus] ?? 'info'
 }
 
 // 获取基础工作状态（去掉目的地信息），如 'away:japan' -> 'away'
 const getBaseWorkStatus = (status: string): string => {
   if (!status) return 'available'
-  const base = status.includes(':') ? status.split(':')[0] : status
-  return base || 'available'
+  const parts = status.split(':')
+  return parts[0] ?? 'available'
 }
 
 // 获取工作状态文本（支持出差/驻外目的地）
@@ -776,7 +777,9 @@ const getWorkStatusText = (status: string): string => {
 
   // 处理带目的地编码的状态（如 'away:japan'、'overseas:turkey'）
   if (status.includes(':')) {
-    const [baseStatus, codeRaw] = status.split(':')
+    const parts = status.split(':')
+    const baseStatus = parts[0] ?? ''
+    const codeRaw = parts[1]
     const baseText = statusMap[baseStatus] || baseStatus
     const code = (codeRaw || '').trim()
     const destText = code ? (destinationLabelMap[code] || code) : ''
@@ -896,8 +899,8 @@ const getAwayDestination = (employee: Employee): string => {
   const status = employee.workStatus || ''
   if (status.startsWith('away') || status.startsWith('overseas')) {
     const parts = status.split(':')
-    if (parts.length > 1 && parts[1].trim()) {
-      const code = parts[1].trim()
+    if (parts.length > 1 && (parts[1] ?? '').trim()) {
+      const code = (parts[1] ?? '').trim()
       return destinationLabelMap[code] || code
     }
   }
@@ -1055,6 +1058,10 @@ const handleMeetingStatusUpdate = () => {
 // 监听用户信息更新事件（当个人设置更新时触发，重新加载员工数据以同步状态）
 const handleProfileUpdate = () => {
   loadData()
+}
+
+const handleResize = () => {
+  isMobile.value = window.innerWidth <= 768
 }
 
 let refreshTimer: ReturnType<typeof setInterval> | null = null
