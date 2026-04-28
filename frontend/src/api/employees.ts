@@ -51,7 +51,7 @@ export interface CreateEmployeeDto {
   email?: string;
   phone?: string;
   role: 'super_admin' | 'department_head' | 'employee' | 'finance' | 'hr' | 'guest';
-  department: 'planning' | 'sales' | 'tech' | 'finance' | 'hr' | 'domestic' | 'management';
+  department: 'general_office' | 'hr_center' | 'finance_center' | 'brand_center' | 'delivery_center' | 'rd_center' | 'sales_ops';
   gender?: 'male' | 'female' | 'other';
   age?: number;
   position: string;

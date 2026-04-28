@@ -3,6 +3,7 @@ export default {
   appName: 'Enbon Admin System',
   // Menu
   menu: {
+    index: 'Home',
     home: 'Home',
     workspace: 'Workspace',
     workGroup: 'Work Groups',

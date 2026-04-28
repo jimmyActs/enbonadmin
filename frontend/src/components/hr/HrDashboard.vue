@@ -1,13 +1,13 @@
 <template>
   <div class="hr-dashboard page-content-enter" v-loading="loading">
     <!-- 人员概览 -->
-    <el-card class="section-card overview-card fade-in-up">
+    <el-card v-if="showOverviewCard" class="section-card overview-card fade-in-up">
       <template #header>
         <div class="card-header">
           <span>{{ $t('hr.dashboard.personnelOverview') }}</span>
         </div>
       </template>
-      <el-row :gutter="20" class="overview-kpis">
+      <el-row v-if="showHeadcountStat" :gutter="20" class="overview-kpis">
         <el-col :xs="12" :sm="6">
           <div class="kpi-pill">
             <div class="kpi-value">{{ employeeStats.total || 0 }}</div>
@@ -34,7 +34,7 @@
         </el-col>
       </el-row>
       <el-row :gutter="24" class="overview-charts">
-        <el-col :xs="24" :lg="12">
+        <el-col v-if="showGenderChart" :xs="24" :lg="12">
           <div class="chart-subtitle">{{ $t('hr.dashboard.genderRatio') }}</div>
           <v-chart
             :key="`gender-${chartAnimKey}`"
@@ -43,7 +43,7 @@
             autoresize
           />
         </el-col>
-        <el-col :xs="24" :lg="12">
+        <el-col v-if="showDepartmentChart" :xs="24" :lg="12">
           <div class="chart-subtitle">{{ $t('hr.dashboard.departmentDistribution') }}</div>
           <v-chart
             :key="`dept-${chartAnimKey}`"
@@ -56,7 +56,7 @@
     </el-card>
 
     <el-row :gutter="24" class="stats-row fade-in-up">
-      <el-col :xs="24" :sm="12" :lg="6">
+      <el-col v-if="showAttendanceStat" :xs="24" :sm="12" :lg="6">
         <div class="stat-card attendance-card">
           <div class="stat-icon">
             <el-icon><Clock /></el-icon>
@@ -73,7 +73,7 @@
         </div>
       </el-col>
 
-      <el-col :xs="24" :sm="12" :lg="6">
+      <el-col v-if="showRecruitmentStat" :xs="24" :sm="12" :lg="6">
         <div class="stat-card recruitment-card">
           <div class="stat-icon">
             <el-icon><User /></el-icon>
@@ -90,7 +90,7 @@
         </div>
       </el-col>
 
-      <el-col :xs="24" :sm="12" :lg="6">
+      <el-col v-if="showPerformanceStat" :xs="24" :sm="12" :lg="6">
         <div class="stat-card performance-card">
           <div class="stat-icon">
             <el-icon><DataLine /></el-icon>
@@ -109,7 +109,7 @@
         </div>
       </el-col>
 
-      <el-col :xs="24" :sm="12" :lg="6">
+      <el-col v-if="showHeadcountStat" :xs="24" :sm="12" :lg="6">
         <div class="stat-card employee-card">
           <div class="stat-icon">
             <el-icon><OfficeBuilding /></el-icon>
@@ -128,7 +128,7 @@
     </el-row>
 
     <el-row :gutter="24" class="charts-row fade-in-up" style="animation-delay: 0.15s;">
-      <el-col :xs="24" :lg="12">
+      <el-col v-if="showAttendanceTrendChart" :xs="24" :lg="12">
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
@@ -144,7 +144,7 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :lg="12">
+      <el-col v-if="showRecruitmentFunnelChart" :xs="24" :lg="12">
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
@@ -162,7 +162,7 @@
     </el-row>
 
     <el-row :gutter="24" class="charts-row fade-in-up" style="animation-delay: 0.3s;">
-      <el-col :xs="24" :lg="12">
+      <el-col v-if="showPerformanceDistChart" :xs="24" :lg="12">
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
@@ -178,7 +178,7 @@
         </el-card>
       </el-col>
 
-      <el-col :xs="24" :lg="12">
+      <el-col v-if="showRecruitmentChannelsChart" :xs="24" :lg="12">
         <el-card class="chart-card">
           <template #header>
             <div class="card-header">
@@ -225,6 +225,7 @@ import {
 } from 'echarts/components'
 import { getHrDashboard } from '../../api/hr'
 import { getEmployees, type Employee } from '../../api/employees'
+import { useUserStore } from '../../store/user'
 
 use([
   CanvasRenderer,
@@ -239,6 +240,186 @@ use([
 ])
 
 const { t, locale } = useI18n()
+
+// 部门名称映射
+const departmentNames: Record<string, string> = {
+  general_office: '总经办',
+  hr_center: '人力资源中心',
+  finance_center: '财务管理中心',
+  brand_center: '品牌管理中心',
+  delivery_center: '交付管理中心',
+  rd_center: '研发中心',
+  sales_ops: '销售运营中心',
+}
+
+// ==================== HR 数据看板岗位权限配置 ====================
+// 根据岗位代码定义可见的统计卡片和图表模块
+interface ModuleConfig {
+  // 可见的统计卡片
+  statCards: ('attendance' | 'recruitment' | 'performance' | 'headcount')[]
+  // 可见的图表
+  charts: ('gender' | 'department' | 'attendanceTrend' | 'recruitmentFunnel' | 'performanceDistribution' | 'recruitmentChannels')[]
+  // 数据权限范围
+  dataScope: 'all' | 'department' | 'self'
+}
+
+const HR_MODULE_CONFIG: Record<string, ModuleConfig> = {
+  // 人资总监 - 全部数据
+  hr_director: {
+    statCards: ['attendance', 'recruitment', 'performance', 'headcount'],
+    charts: ['gender', 'department', 'attendanceTrend', 'recruitmentFunnel', 'performanceDistribution', 'recruitmentChannels'],
+    dataScope: 'all',
+  },
+  // 招聘人事专员 - 招聘数据为主
+  hr_recruiter: {
+    statCards: ['recruitment', 'headcount'],
+    charts: ['department', 'recruitmentFunnel', 'recruitmentChannels'],
+    dataScope: 'all',
+  },
+  // 行政人事专员 - 考勤和活动数据
+  hr_admin: {
+    statCards: ['attendance', 'headcount'],
+    charts: ['gender', 'department', 'attendanceTrend'],
+    dataScope: 'department',
+  },
+  // 人事行政前台 - 前台接待数据
+  hr_front_desk: {
+    statCards: ['headcount'],
+    charts: ['department'],
+    dataScope: 'department',
+  },
+  // HRBP（试用期）- 考勤和招聘
+  hr_bp_probation: {
+    statCards: ['attendance', 'recruitment', 'headcount'],
+    charts: ['attendanceTrend', 'department'],
+    dataScope: 'department',
+  },
+}
+
+// 默认配置（其他HR岗位）
+const DEFAULT_HR_CONFIG: ModuleConfig = {
+  statCards: ['attendance', 'headcount'],
+  charts: ['department'],
+  dataScope: 'department',
+}
+
+// 获取当前用户岗位代码
+// 优先级：positionCode（API返回，最新）> userInfo.position（JWT，兜底）
+const getCurrentPositionCode = (): string => {
+  try {
+    const userStore = useUserStore()
+    // positionCode 是 API（refreshPermissions）返回的，已通过 resolvePosition 解析
+    if (userStore.positionCode) return userStore.positionCode
+    // 兜底：JWT payload 中的 position（可能是岗位名称，需要手动匹配）
+    if (userStore.userInfo?.position) return userStore.userInfo.position
+    return ''
+  } catch {
+    return ''
+  }
+}
+
+// 根据岗位获取模块配置
+const getModuleConfig = (): ModuleConfig => {
+  const positionCode = getCurrentPositionCode()
+  return HR_MODULE_CONFIG[positionCode] || DEFAULT_HR_CONFIG
+}
+
+// 当前可见的统计卡片
+const visibleStatCards = computed(() => {
+  const config = getModuleConfig()
+  return config.statCards
+})
+
+// 当前可见的图表
+const visibleCharts = computed(() => {
+  const config = getModuleConfig()
+  return config.charts
+})
+
+// 是否显示人员概览卡片
+const showOverviewCard = computed(() => {
+  return visibleStatCards.value.length > 0 || visibleCharts.value.length > 0
+})
+
+// 是否显示考勤统计卡片
+const showAttendanceStat = computed(() => {
+  // 超级管理员显示全部统计卡片
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleStatCards.value.includes('attendance')
+})
+
+// 是否显示招聘统计卡片
+const showRecruitmentStat = computed(() => {
+  // 超级管理员显示全部统计卡片
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleStatCards.value.includes('recruitment')
+})
+
+// 是否显示绩效统计卡片
+const showPerformanceStat = computed(() => {
+  // 超级管理员显示全部统计卡片
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleStatCards.value.includes('performance')
+})
+
+// 是否显示人数统计卡片
+const showHeadcountStat = computed(() => {
+  // 超级管理员显示全部统计卡片
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleStatCards.value.includes('headcount')
+})
+
+// 是否显示性别分布图
+const showGenderChart = computed(() => {
+  // 超级管理员显示全部图表
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleCharts.value.includes('gender')
+})
+
+// 是否显示部门分布图
+const showDepartmentChart = computed(() => {
+  // 超级管理员显示全部图表
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleCharts.value.includes('department')
+})
+
+// 是否显示考勤趋势图
+const showAttendanceTrendChart = computed(() => {
+  // 超级管理员显示全部图表
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleCharts.value.includes('attendanceTrend')
+})
+
+// 是否显示招聘漏斗图
+const showRecruitmentFunnelChart = computed(() => {
+  // 超级管理员显示全部图表
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleCharts.value.includes('recruitmentFunnel')
+})
+
+// 是否显示绩效分布图
+const showPerformanceDistChart = computed(() => {
+  // 超级管理员显示全部图表
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleCharts.value.includes('performanceDistribution')
+})
+
+// 是否显示招聘渠道图
+const showRecruitmentChannelsChart = computed(() => {
+  // 超级管理员显示全部图表
+  const userStore = useUserStore()
+  if (userStore.isSuperAdmin) return true
+  return visibleCharts.value.includes('recruitmentChannels')
+})
 
 const ECHARTS_ANIM = {
   animation: true,
@@ -341,7 +522,10 @@ const genderChartOption = computed(() => {
 
 const departmentBarOption = computed(() => {
   const depts = employeeStats.value.departments || []
-  const names = depts.map((d: { department: string }) => d.department || t('hr.common.noDepartment'))
+  const names = depts.map((d: { department: string }) => {
+    const name = d.department || ''
+    return departmentNames[name] || name || t('hr.common.noDepartment')
+  })
   const values = depts.map((d: { count: number }) => d.count)
   return {
     ...ECHARTS_ANIM,
@@ -558,6 +742,7 @@ const getTopRating = () => {
 }
 
 const getChannelName = (source: string) => {
+  if (!source) return '-'
   const names: Record<string, string> = {
     boss: t('hr.recruitment.channels.boss'),
     zhilian: t('hr.recruitment.channels.zhilian'),

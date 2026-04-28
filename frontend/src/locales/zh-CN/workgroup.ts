@@ -5,6 +5,7 @@ export default {
   people: '人',
   noEmployees: '暂无员工数据',
   noPosition: '未设置职位',
+  noDepartment: '未分配部门',
   setReminder: '设置提醒',
   targetUser: '目标用户',
   reminderContent: '提醒内容',

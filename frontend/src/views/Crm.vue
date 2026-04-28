@@ -6,9 +6,9 @@
         <p class="page-subtitle">{{ t('crm.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <!-- 新建商机按钮：需要 crm.lead.create 权限 -->
+        <!-- 新建商机按钮：需要 crm.lead.assign 权限 -->
         <el-button
-          v-if="userStore.hasPermission('crm.lead.create')"
+          v-if="canAssignLeads"
           type="primary"
           :icon="Plus"
           size="large"
@@ -127,6 +127,15 @@
                   <h3>{{ t('crm.ownerStats.title') }}</h3>
                   <p>{{ t('crm.ownerStats.desc') }}</p>
                 </div>
+                <el-button
+                  v-if="canViewTeamDashboard"
+                  type="primary"
+                  text
+                  size="small"
+                  @click="$router.push('/crm/team-dashboard')"
+                >
+                  {{ locale === 'zh-CN' ? '完整看板 →' : 'Full Dashboard →' }}
+                </el-button>
               </div>
             </template>
             <div v-if="ownerStats.length === 0" class="owner-stats-empty">
@@ -201,7 +210,7 @@
           </div>
         </el-tab-pane>
 
-        <el-tab-pane name="leads" v-if="canViewLeads" lazy>
+        <el-tab-pane name="leads" v-if="canAssignLeads" lazy>
           <template #label>
             <el-icon><TrendCharts /></el-icon>
             {{ t('crm.tabs.leads') }}
@@ -220,16 +229,6 @@
           </template>
           <div class="tab-content">
             <PoolModule />
-          </div>
-        </el-tab-pane>
-
-        <el-tab-pane name="targets" v-if="canViewTargets" lazy>
-          <template #label>
-            <el-icon><DataLine /></el-icon>
-            {{ t('crm.tabs.targets') }}
-          </template>
-          <div class="tab-content">
-            <TargetModule />
           </div>
         </el-tab-pane>
 
@@ -283,14 +282,14 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import {
   Plus, Refresh, TrendCharts, User, ChatLineRound,
-  Briefcase, Odometer, Grid, DataLine, Message, DataAnalysis, Upload
+  Briefcase, Odometer, Grid, Message, DataAnalysis, Upload
 } from '@element-plus/icons-vue'
 import { getCrmSummary, getCrmPipeline, getCrmCustomers, getCrmOwnerStats, getCrmLeadStats,
   type CrmCustomer, type CrmSummaryStats, type CrmOwnerStat, type CrmLeadStat } from '../api/crm'
 import CustomerModule from '../components/sales/CustomerModule.vue'
 import LeadModule from '../components/crm/LeadModule.vue'
 import PoolModule from '../components/crm/PoolModule.vue'
-import TargetModule from '../components/crm/TargetModule.vue'
+import LeadPoolModule from '../components/crm/LeadPoolModule.vue'
 import EmailModule from '../components/crm/EmailModule.vue'
 import AnalyticsModule from '../components/crm/AnalyticsModule.vue'
 import ImportModule from '../components/shared/ImportModule.vue'
@@ -302,15 +301,15 @@ const { t, locale } = useI18n()
 const userStore = useUserStore()
 
 const isDeptHead = computed(() => {
-  // 有团队统计权限的就是"部门负责人"
   return userStore.hasPermission('crm.stats.team')
 })
 
 const canViewCustomers = computed(() => userStore.hasPermission('crm.customer.view'))
-const canViewLeads = computed(() => userStore.hasPermission('crm.lead.view'))
+const canViewLeads = computed(() => userStore.hasPermission('crm.lead.view') || userStore.hasPermission('crm.lead.assign'))
+const canAssignLeads = computed(() => userStore.hasPermission('crm.lead.assign') || userStore.userInfo?.role === 'super_admin')
 const canViewEmails = computed(() => userStore.hasPermission('crm.email.view'))
-const canViewTargets = computed(() => userStore.hasPermission('crm.target.view'))
 const canManageInquirySources = computed(() => userStore.hasPermission('crm.inquirySource.manage'))
+const canViewTeamDashboard = computed(() => userStore.hasPermission('crm.stats.team') || userStore.userInfo?.role === 'super_admin')
 
 const activeTab = ref('overview')
 const summary = ref<CrmSummaryStats>({

@@ -77,6 +77,50 @@ export const getAttendanceStats = (params?: { startDate?: string; endDate?: stri
   return api.get('/hr/attendance/stats', { params })
 }
 
+// ========== 请假申请 ==========
+
+export type LeaveStatus = 'pending' | 'approved' | 'rejected' | 'cancelled'
+export type LeaveType = 'annual' | 'sick' | 'personal' | 'maternity' | 'paternity' | 'marriage' | 'bereavement' | 'unpaid' | 'other'
+
+export interface HrLeaveRequest {
+  id: number
+  employeeId: number
+  employeeName: string
+  department?: string
+  leaveType: LeaveType
+  startDate: string
+  endDate: string
+  days: number
+  reason?: string
+  status: LeaveStatus
+  approverId?: number
+  approverName?: string
+  approvedAt?: string
+  approverComment?: string
+  rejectReason?: string
+  createdAt: string
+}
+
+export const createLeaveRequest = (data: Partial<HrLeaveRequest>): Promise<HrLeaveRequest> => {
+  return api.post('/hr/leave-requests', data)
+}
+
+export const getLeaveRequests = (params?: { page?: number; pageSize?: number; status?: string; keyword?: string }): Promise<{ data: HrLeaveRequest[]; total: number; page: number; pageSize: number }> => {
+  return api.get('/hr/leave-requests', { params })
+}
+
+export const approveLeaveRequest = (id: number, comment?: string): Promise<HrLeaveRequest> => {
+  return api.post(`/hr/leave-requests/${id}/approve`, { comment })
+}
+
+export const rejectLeaveRequest = (id: number, reason: string): Promise<HrLeaveRequest> => {
+  return api.post(`/hr/leave-requests/${id}/reject`, { reason })
+}
+
+export const cancelLeaveRequest = (id: number): Promise<HrLeaveRequest> => {
+  return api.post(`/hr/leave-requests/${id}/cancel`)
+}
+
 // ========== 绩效管理 ==========
 
 export interface HrPerformanceTemplate {
@@ -253,6 +297,16 @@ export const createRecruitmentDemand = (data: Partial<HrRecruitmentDemand>): Pro
   return api.post('/hr/recruitment/demands', data)
 }
 
+// 员工自助：提交招聘需求
+export const createMyRecruitmentDemand = (data: Partial<HrRecruitmentDemand>): Promise<HrRecruitmentDemand> => {
+  return api.post('/hr/recruitment/demands/self', data)
+}
+
+// 员工自助：查看自己提交的招聘需求
+export const getMyRecruitmentDemands = (): Promise<HrRecruitmentDemand[]> => {
+  return api.get('/hr/recruitment/demands/my')
+}
+
 export const getRecruitmentDemands = (params?: RecruitmentDemandQuery): Promise<{ data: HrRecruitmentDemand[]; total: number; page: number; pageSize: number }> => {
   return api.get('/hr/recruitment/demands', { params })
 }
@@ -287,6 +341,20 @@ export const deleteCandidate = (id: number): Promise<{ success: boolean }> => {
 
 export const getRecruitmentStats = (): Promise<RecruitmentStats> => {
   return api.get('/hr/recruitment/stats')
+}
+
+export const scheduleInterview = (
+  candidateId: number,
+  data: { interviewTime?: string; interviewerName?: string; interviewRecord?: string; sendEmail?: boolean; emailContent?: string },
+): Promise<void> => {
+  return api.post(`/hr/recruitment/candidates/${candidateId}/schedule`, data)
+}
+
+export const sendInterviewEmail = (
+  candidateId: number,
+  data: { email: string; subject: string; content: string },
+): Promise<void> => {
+  return api.post(`/hr/recruitment/candidates/${candidateId}/send-email`, data)
 }
 
 // ========== 薪资管理 ==========
@@ -389,6 +457,14 @@ export const confirmPayroll = (id: number): Promise<HrPayroll> => {
   return api.post(`/hr/payroll/${id}/confirm`)
 }
 
+export const getMyPayroll = (): Promise<HrPayroll[]> => {
+  return api.get('/hr/payroll/my')
+}
+
+export const getPayrollPayslip = (id: number): Promise<{ buffer: string; filename: string }> => {
+  return api.get(`/hr/payroll/${id}/payslip`)
+}
+
 export const deletePayroll = (id: number): Promise<{ success: boolean }> => {
   return api.delete(`/hr/payroll/${id}`)
 }
@@ -449,7 +525,7 @@ export const exportEmployees = (): Promise<{ buffer: string; filename: string }>
 export const importEmployees = (file: File): Promise<AttendanceImportResult> => {
   const formData = new FormData()
   formData.append('file', file)
-  return api.post('/hr/employees/import', formData, {
+  return api.post('/import/hr/employees/batch', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
@@ -530,3 +606,444 @@ export const updateHrEventStatus = (id: number, data: { status: string }): Promi
 export const deleteHrEvent = (id: number): Promise<{ success: boolean }> => {
   return api.delete(`/hr/events/${id}`)
 }
+
+// ========== 离职管理 ==========
+
+export interface HrEmployeeExit {
+  id: number
+  employeeId: number
+  exitDate: string
+  exitType: 'RESIGNATION' | 'TERMINATION' | 'RETIREMENT'
+  exitReason?: string
+  exitInterview?: string
+  isExitInterviewed: boolean
+  probationStatus?: string
+  probationEndDate?: string
+  warningCount: number
+  exitInterviewData?: Record<string, any>
+  createdAt: string
+}
+
+export interface ExitStats {
+  totalExits: number
+  totalEmployees: number
+  byMonth: Record<string, number>
+  byReason: Record<string, number>
+  byType: Record<string, number>
+}
+
+export const createExit = (data: Partial<HrEmployeeExit>): Promise<HrEmployeeExit> => {
+  return api.post('/hr/exit', data)
+}
+
+export const getExits = (): Promise<HrEmployeeExit[]> => {
+  return api.get('/hr/exit')
+}
+
+export const getExitByEmployee = (employeeId: number): Promise<HrEmployeeExit[]> => {
+  return api.get(`/hr/exit/employee/${employeeId}`)
+}
+
+export const getExitStats = (params?: { year?: number; department?: string }): Promise<ExitStats> => {
+  return api.get('/hr/exit/stats', { params })
+}
+
+// ========== 潜力评估 ==========
+
+export interface PotentialMatrixData {
+  employees: Array<{
+    employeeId: number
+    employeeName?: string
+    department?: string
+    position?: string
+    performanceScore?: number
+    potentialLevel?: 'HIGH' | 'MEDIUM' | 'LOW'
+    category?: string
+    suggestion?: string
+  }>
+  stats: Record<string, number>
+}
+
+export const getPotentialMatrix = (params?: { department?: string; period?: string }): Promise<PotentialMatrixData> => {
+  return api.get('/hr/potential/matrix', { params })
+}
+
+// ========== 绩效热力图 ==========
+
+export interface PerformanceHeatmapData {
+  employees: Array<{
+    employeeId: number
+    employeeName?: string
+    department?: string
+    scores: Record<number, number>
+    totalScore: number
+  }>
+  indicators: Array<{
+    id: number
+    name: string
+    maxScore: number
+    weight: number
+  }>
+  stats: {
+    avgScore: number
+    topPerformers: number
+    needsAttention: number
+    coverageRate: number
+  }
+}
+
+export const getPerformanceHeatmap = (params?: { department?: string; period?: string }): Promise<PerformanceHeatmapData> => {
+  return api.get('/hr/performance/heatmap', { params })
+}
+
+// ========== 面试日历 ==========
+
+export interface InterviewSchedule {
+  id: number
+  candidateId: number
+  candidateName?: string
+  position?: string
+  interviewType?: string
+  interviewerId?: number
+  interviewerName?: string
+  scheduledAt: string
+  duration?: number
+  location?: string
+  status?: string
+  notes?: string
+}
+
+export interface InterviewScheduleResponse {
+  schedules: InterviewSchedule[]
+  total: number
+}
+
+export const getInterviewSchedules = (params?: { status?: string; department?: string }): Promise<InterviewScheduleResponse> => {
+  return api.get('/hr/recruitment/schedules', { params })
+}
+
+export const sendInterviewReminder = (scheduleId: number): Promise<void> => {
+  return api.post(`/hr/recruitment/schedules/${scheduleId}/reminder`)
+}
+
+// ========== 试用期管理 ==========
+
+export interface HrProbation {
+  id: number
+  employeeId: number
+  startDate: string
+  endDate: string
+  originalEndDate?: string
+  status: 'ACTIVE' | 'EXTENDED' | 'PASSED' | 'FAILED'
+  reportCount: number
+  reportRequired: number
+  lastReportDate?: string
+  kpiTargets?: Record<string, any>
+  kpiProgress?: Record<string, any>
+  warnings?: Array<{ date: string; type: string; content: string }>
+  evaluations?: Record<string, any>[]
+  createdAt: string
+}
+
+export interface HrProbationEvaluation {
+  id: number
+  probationId: number
+  evaluatorId: number
+  evaluatorName?: string
+  evaluationDate: string
+  score?: number
+  comment?: string
+  type?: string
+  createdAt: string
+}
+
+export interface ProbationStats {
+  total: number
+  active: number
+  passed: number
+  failed: number
+  extended: number
+}
+
+export const createProbation = (data: Partial<HrProbation>): Promise<HrProbation> => {
+  return api.post('/hr/probation', data)
+}
+
+export const getProbationByEmployee = (employeeId: number): Promise<HrProbation[]> => {
+  return api.get(`/hr/probation/employee/${employeeId}`)
+}
+
+export const updateProbation = (id: number, data: Partial<HrProbation>): Promise<HrProbation> => {
+  return api.put(`/hr/probation/${id}`, data)
+}
+
+export const addProbationEvaluation = (id: number, data: Partial<HrProbationEvaluation>): Promise<HrProbationEvaluation> => {
+  return api.post(`/hr/probation/${id}/evaluations`, data)
+}
+
+export const getProbationEvaluations = (id: number): Promise<HrProbationEvaluation[]> => {
+  return api.get(`/hr/probation/${id}/evaluations`)
+}
+
+export const addProbationWarning = (id: number, data: { type: string; content: string }): Promise<HrProbation> => {
+  return api.post(`/hr/probation/${id}/warnings`, data)
+}
+
+export const extendProbation = (id: number, data: { newEndDate: string }): Promise<HrProbation> => {
+  return api.post(`/hr/probation/${id}/extend`, data)
+}
+
+export const confirmProbation = (id: number, data: { passed: boolean }): Promise<HrProbation> => {
+  return api.post(`/hr/probation/${id}/confirm`, data)
+}
+
+export const getProbationStats = (): Promise<ProbationStats> => {
+  return api.get('/hr/probation/stats')
+}
+
+export const getProbations = (params?: { page?: number; pageSize?: number; status?: string; keyword?: string }): Promise<{ data: HrProbation[]; total: number }> => {
+  return api.get('/hr/probation', { params })
+}
+
+// ========== 员工搜索 ==========
+
+export interface EmployeeSearchResult {
+  id: number
+  name: string
+  department?: string
+  position?: string
+}
+
+export const searchEmployees = (params: { keyword?: string; department?: string; limit?: number }): Promise<EmployeeSearchResult[]> => {
+  return api.get('/hr/employees/search', { params })
+}
+
+// ========== 薪酬预算管理 ==========
+
+export interface HrPayrollBudget {
+  id: number
+  year: number
+  quarter?: number
+  departmentCode?: string
+  totalBudget: number
+  salaryBudget?: number
+  bonusBudget?: number
+  socialBudget?: number
+  description?: string
+  createdAt: string
+}
+
+export interface HrPayrollAlert {
+  id: number
+  type: string
+  level: string
+  message: string
+  year: number
+  quarter?: number
+  departmentCode?: string
+  status: 'PENDING' | 'ACKNOWLEDGED' | 'RESOLVED'
+  resolvedBy?: number
+  resolvedAt?: string
+  resolution?: string
+  createdAt: string
+}
+
+export interface PayrollCostStats {
+  year: number
+  quarter?: number
+  budgets: HrPayrollBudget[]
+  byDept: Record<string, { totalBudget: number; totalActual: number }>
+}
+
+export const createPayrollBudget = (data: Partial<HrPayrollBudget>): Promise<HrPayrollBudget> => {
+  return api.post('/hr/payroll/budget', data)
+}
+
+export const getPayrollBudgets = (): Promise<HrPayrollBudget[]> => {
+  return api.get('/hr/payroll/budget')
+}
+
+export const updatePayrollBudget = (id: number, data: Partial<HrPayrollBudget>): Promise<HrPayrollBudget> => {
+  return api.put(`/hr/payroll/budget/${id}`, data)
+}
+
+export const getPayrollCostStats = (params: { year: number; quarter?: number }): Promise<PayrollCostStats> => {
+  return api.get('/hr/payroll/cost-stats', { params })
+}
+
+export const getPayrollAlerts = (params?: { status?: string; year?: number }): Promise<HrPayrollAlert[]> => {
+  return api.get('/hr/payroll/alerts', { params })
+}
+
+export const resolvePayrollAlert = (id: number, data: { resolution: string }): Promise<HrPayrollAlert> => {
+  return api.put(`/hr/payroll/alerts/${id}/resolve`, data)
+}
+
+// ========== 培训管理 ==========
+
+export interface HrTrainingCourse {
+  id: number
+  code: string
+  title: string
+  description?: string
+  category?: string
+  type: 'VIDEO' | 'DOCUMENT' | 'OFFLINE'
+  videoUrl?: string
+  duration?: number
+  materials?: string[]
+  isRequired: boolean
+  passingScore: number
+  maxAttempts: number
+  cost?: number
+  instructor?: string
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED'
+  targetDepartments?: string[]
+  targetUserIds?: number[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface HrTrainingPlan {
+  id: number
+  name: string
+  periodStart: string
+  periodEnd: string
+  targetDepartment?: string
+  targetPosition?: string
+  status: 'DRAFT' | 'PUBLISHED' | 'CLOSED'
+  description?: string
+  createdAt: string
+}
+
+export interface HrTrainingPlanCourse {
+  id: number
+  planId: number
+  courseId: number
+  course?: HrTrainingCourse
+  dueDate?: string
+  createdAt: string
+}
+
+export interface HrTrainingRecord {
+  id: number
+  employeeId: number
+  employeeName?: string
+  courseId: number
+  course?: HrTrainingCourse
+  planId?: number
+  plan?: HrTrainingPlan
+  status: 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'FAILED'
+  progress: number
+  score?: number
+  bestScore?: number
+  attempts: number
+  startedAt?: string
+  completedAt?: string
+  createdAt: string
+}
+
+export interface HrTrainingEvaluation {
+  id: number
+  recordId: number
+  evaluatorId: number
+  evaluatorName?: string
+  rating?: number
+  comment?: string
+  createdAt: string
+}
+
+export interface TrainingStats {
+  total: number
+  completed: number
+  completionRate: number
+  avgProgress: number
+  avgScore: number
+  totalCourses: number
+  totalLearners: number
+}
+
+export interface TrainingRoi {
+  totalCost: number
+  totalCourses: number
+  totalLearners: number
+  completedCount: number
+  costPerLearner: number
+  roi: number
+}
+
+export const createTrainingCourse = (data: Partial<HrTrainingCourse>): Promise<HrTrainingCourse> => {
+  return api.post('/hr/training/courses', data)
+}
+
+export const getTrainingCourses = (params?: { category?: string; status?: string }): Promise<HrTrainingCourse[]> => {
+  return api.get('/hr/training/courses', { params })
+}
+
+export const getMyTrainingCourses = (params?: { category?: string }): Promise<HrTrainingCourse[]> => {
+  return api.get('/hr/training/courses/my', { params })
+}
+
+export const getTrainingCourse = (id: number): Promise<HrTrainingCourse> => {
+  return api.get(`/hr/training/courses/${id}`)
+}
+
+export const updateTrainingCourse = (id: number, data: Partial<HrTrainingCourse>): Promise<HrTrainingCourse> => {
+  return api.put(`/hr/training/courses/${id}`, data)
+}
+
+export const publishTrainingCourse = (id: number): Promise<HrTrainingCourse> => {
+  return api.post(`/hr/training/courses/${id}/publish`)
+}
+
+// 视频课程上传（包含视频文件）
+export const uploadTrainingCourseWithVideo = (formData: FormData): Promise<HrTrainingCourse> => {
+  return api.post('/hr/training/courses/upload-video', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export const createTrainingPlan = (data: Partial<HrTrainingPlan>): Promise<HrTrainingPlan> => {
+  return api.post('/hr/training/plans', data)
+}
+
+export const getTrainingPlans = (): Promise<HrTrainingPlan[]> => {
+  return api.get('/hr/training/plans')
+}
+
+export const addPlanCourse = (id: number, data: { courseId: number; dueDate?: string }): Promise<HrTrainingPlanCourse> => {
+  return api.post(`/hr/training/plans/${id}/courses`, data)
+}
+
+export const getPlanCourses = (id: number): Promise<HrTrainingPlanCourse[]> => {
+  return api.get(`/hr/training/plans/${id}/courses`)
+}
+
+export const publishTrainingPlan = (id: number): Promise<HrTrainingPlan> => {
+  return api.post(`/hr/training/plans/${id}/publish`)
+}
+
+export const updateLearningProgress = (courseId: number, data: { progress: number }): Promise<HrTrainingRecord> => {
+  return api.post(`/hr/training/learn/${courseId}`, data)
+}
+
+export const submitTrainingExam = (courseId: number, data: { score: number }): Promise<HrTrainingRecord> => {
+  return api.post(`/hr/training/exam/${courseId}`, data)
+}
+
+export const getMyTrainingRecords = (): Promise<HrTrainingRecord[]> => {
+  return api.get('/hr/training/my-records')
+}
+
+export const createTrainingEvaluation = (data: Partial<HrTrainingEvaluation>): Promise<HrTrainingEvaluation> => {
+  return api.post('/hr/training/evaluations', data)
+}
+
+export const getTrainingStats = (params?: { planId?: number }): Promise<TrainingStats> => {
+  return api.get('/hr/training/stats', { params })
+}
+
+export const getTrainingRoi = (): Promise<TrainingRoi> => {
+  return api.get('/hr/training/stats/roi')
+}
+
+// ========== 绩效管理（P1增强）==========

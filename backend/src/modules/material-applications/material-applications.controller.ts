@@ -41,11 +41,11 @@ export class MaterialApplicationsController {
     }
   }
 
-  // 检查是否为行政部
+  // 检查是否为人力资源中心
   private async isHRDepartment(user: any): Promise<boolean> {
     if (!user) return false;
     if (user.role === 'super_admin') return true;
-    return user.department === 'hr';
+    return user.department === 'hr_center';
   }
 
   // 创建申请

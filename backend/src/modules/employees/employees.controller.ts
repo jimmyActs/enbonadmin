@@ -16,6 +16,8 @@ import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { Department } from '../users/entities/user.entity';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
+import { PermissionsService } from '../permissions/permissions.service';
+import { PermissionEngineService } from '../permissions/permission-engine.service';
 import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 
 @Controller('employees')
@@ -24,6 +26,8 @@ export class EmployeesController {
     private readonly employeesService: EmployeesService,
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly permissionsService: PermissionsService,
+    private readonly permissionEngineService: PermissionEngineService,
   ) {}
 
   /**
@@ -45,11 +49,23 @@ export class EmployeesController {
   }
 
   /**
-   * 检查权限：只有admin、部门领导、行政总监、行政前台可以访问
+   * 检查权限：只有超级管理员、部门领导、行政总监、行政前台可以访问
+   * 判定条件（满足任一即可）：
+   * 1. 用户的 role 字段为 'super_admin'（系统身份）
+   * 2. 用户绑定了 isSuperAdmin: true 的角色模板（权限身份）
    */
-  private canAccessEmployeeManagement(role: string): boolean {
+  private async canAccessEmployeeManagementEx(userId: number, role: string): Promise<boolean> {
+    // 条件1：系统身份
+    if (role === 'super_admin') {
+      return true;
+    }
+    // 条件2：通过角色模板获得的超级管理员身份
+    const isByTemplate = await this.permissionsService.isUserSuperAdmin(userId, role);
+    if (isByTemplate) {
+      return true;
+    }
+    // 部门领导、行政总监、行政前台可以访问
     return (
-      role === 'super_admin' ||
       role === 'department_head' ||
       role === 'hr_director' ||
       role === 'hr_reception' ||
@@ -68,7 +84,7 @@ export class EmployeesController {
       throw new UnauthorizedException('未登录');
     }
 
-    if (!this.canAccessEmployeeManagement(user.role)) {
+    if (!await this.canAccessEmployeeManagementEx(user.id, user.role)) {
       throw new UnauthorizedException('无权访问');
     }
 
@@ -149,7 +165,7 @@ export class EmployeesController {
       throw new UnauthorizedException('未登录');
     }
 
-    if (!this.canAccessEmployeeManagement(user.role)) {
+    if (!await this.canAccessEmployeeManagementEx(user.id, user.role)) {
       throw new UnauthorizedException('无权访问');
     }
 
@@ -167,11 +183,29 @@ export class EmployeesController {
       throw new UnauthorizedException('未登录');
     }
 
-    if (!this.canAccessEmployeeManagement(user.role)) {
+    if (!await this.canAccessEmployeeManagementEx(user.id, user.role)) {
       throw new UnauthorizedException('无权访问');
     }
 
-    return this.employeesService.create(createEmployeeDto);
+    // 【关键修复】同步等待权限分配完成，避免员工创建后立即登录时权限尚未写入
+    // 旧代码使用 .then() 异步执行，导致时序问题：员工创建后立即登录，权限还在插入中
+    const newEmployee = await this.employeesService.create(createEmployeeDto);
+
+    // 创建员工后，同步根据职位分配权限（必须等待写入完成才能返回）
+    if (newEmployee.position) {
+      try {
+        await this.permissionEngineService.autoAssignRoleByPosition(
+          newEmployee.id,
+          newEmployee.position,
+          newEmployee.department || '',
+        );
+      } catch (e) {
+        // 权限分配失败时记录日志，但不影响员工创建成功
+        console.warn('[EmployeesController.create] autoAssignRoleByPosition failed:', e.message);
+      }
+    }
+
+    return newEmployee;
   }
 
   /**
@@ -189,17 +223,36 @@ export class EmployeesController {
       throw new UnauthorizedException('未登录');
     }
 
-    if (!this.canAccessEmployeeManagement(user.role)) {
+    if (!await this.canAccessEmployeeManagementEx(user.id, user.role)) {
       throw new UnauthorizedException('无权访问');
     }
 
     // 检查是否操作系统管理员账户
     const targetEmployee = await this.employeesService.findOne(id);
-    if (targetEmployee.username === 'admin' && user.role !== 'super_admin') {
+    if (targetEmployee.username === 'admin' && !(await this.canAccessEmployeeManagementEx(user.id, user.role))) {
       throw new UnauthorizedException('无权操作系统管理员账户');
     }
 
-    return this.employeesService.update(id, updateData);
+    const newPosition = updateData.position;
+    const positionChanged = newPosition && newPosition !== targetEmployee.position;
+
+    // 【关键修复】同步等待权限重新分配完成
+    const updatedEmployee = await this.employeesService.update(id, updateData);
+
+    // 如果职位变更，同步重新分配职位权限（必须等待完成才能返回）
+    if (positionChanged && newPosition) {
+      try {
+        await this.permissionEngineService.autoAssignRoleByPosition(
+          updatedEmployee.id,
+          newPosition,
+          updatedEmployee.department || '',
+        );
+      } catch (e) {
+        console.warn('[EmployeesController.update] autoAssignRoleByPosition failed on position update:', e.message);
+      }
+    }
+
+    return updatedEmployee;
   }
 
   /**
@@ -213,13 +266,13 @@ export class EmployeesController {
       throw new UnauthorizedException('未登录');
     }
 
-    if (!this.canAccessEmployeeManagement(user.role)) {
+    if (!await this.canAccessEmployeeManagementEx(user.id, user.role)) {
       throw new UnauthorizedException('无权访问');
     }
 
     // 检查是否操作系统管理员账户
     const targetEmployee = await this.employeesService.findOne(id);
-    if (targetEmployee.username === 'admin' && user.role !== 'super_admin') {
+    if (targetEmployee.username === 'admin' && !(await this.canAccessEmployeeManagementEx(user.id, user.role))) {
       throw new UnauthorizedException('无权操作系统管理员账户');
     }
 

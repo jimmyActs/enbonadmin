@@ -24,8 +24,12 @@ export class CrmInquirySource {
   id: number;
 
   // ========== 网站基本信息 ==========
-  @Column()
+  @Column({ unique: true })
   name: string; // 网站名称（如 "ENBON 官网"）
+
+  /** Webhook 公开访问令牌（UUID），外部渠道通过此 Token 提交询盘 */
+  @Column({ unique: true, nullable: true })
+  sourceToken: string;
 
   @Column({
     type: 'simple-enum',
@@ -82,10 +86,10 @@ export class CrmInquirySource {
   @Column({ type: 'integer', default: 0 })
   pendingInquiries: number; // 待处理询盘数
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lastFetchAt: Date; // 最近一次拉取时间
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lastInquiryAt: Date; // 最新一条询盘时间
 
   // ========== 备注 ==========

@@ -17,7 +17,7 @@ export class Memo { // 导出 Memo 实体类
   @Column({ type: 'integer' }) // 关联用户 ID，整数
   userId: number; // 所属用户 ID
 
-  @Column({ type: 'datetime', nullable: true }) // 提醒时间，可为空
+  @Column({ type: 'timestamp', nullable: true }) // 提醒时间，可为空
   reminderTime: Date | null; // 提醒时间
 
   @Column({ type: 'text', nullable: true }) // 提醒类型，可为空

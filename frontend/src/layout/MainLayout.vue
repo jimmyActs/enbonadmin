@@ -117,6 +117,17 @@
 
       <!-- 主要内容 -->
       <el-main class="main-container">
+        <!-- 面包屑导航 -->
+        <el-breadcrumb separator="/" class="page-breadcrumb" v-if="breadcrumbs.length > 0">
+          <el-breadcrumb-item :to="{ path: '/' }">
+            <el-icon><HomeFilled /></el-icon>
+            <span>{{ $t('layout.menu.index') || '首页' }}</span>
+          </el-breadcrumb-item>
+          <el-breadcrumb-item v-for="item in breadcrumbs" :key="item.path" :to="item.path ? { path: item.path } : undefined">
+            {{ item.title }}
+          </el-breadcrumb-item>
+        </el-breadcrumb>
+
         <router-view v-slot="{ Component, route }">
           <transition name="fade-slide">
             <component :is="Component" :key="route.path" />
@@ -170,30 +181,80 @@ const activeMenu = computed(() => route.path)
 const userName = computed(() => userStore.userName)
 
 // 权限控制：菜单是否显示
-const isSuperAdmin = computed(() => userStore.userInfo?.role === 'super_admin')
+// 统一使用 userStore.isSuperAdmin，与路由守卫保持一致
+const isSuperAdmin = computed(() => userStore.isSuperAdmin)
+
+// 面包屑导航：根据当前路由生成面包屑
+const breadcrumbs = computed(() => {
+  const crumbs: { title: string; path?: string }[] = []
+  const { path } = route
+
+  // 根据路径匹配生成面包屑
+  const pathMap: Record<string, { title: string; parent?: string }> = {
+    '/index': { title: '首页' },
+    '/workspace': { title: '工作空间' },
+    '/workgroup': { title: '工作小组' },
+    '/files': { title: '文件管理' },
+    '/crm': { title: 'CRM管理' },
+    '/crm/team-dashboard': { title: '团队看板', parent: '/crm' },
+    '/sales': { title: '销售工作台' },
+    '/hr': { title: '人力资源' },
+    '/employees': { title: '人员管理' },
+    '/permissions': { title: '权限中心' },
+    '/workflow': { title: '工作流' },
+  }
+
+  const enMap: Record<string, { title: string; parent?: string }> = {
+    '/index': { title: 'Home' },
+    '/workspace': { title: 'Workspace' },
+    '/workgroup': { title: 'Work Group' },
+    '/files': { title: 'Files' },
+    '/crm': { title: 'CRM' },
+    '/crm/team-dashboard': { title: 'Team Dashboard', parent: '/crm' },
+    '/sales': { title: 'Sales' },
+    '/hr': { title: 'HR' },
+    '/employees': { title: 'Employees' },
+    '/permissions': { title: 'Permissions' },
+    '/workflow': { title: 'Workflow' },
+  }
+
+  const isZh = !route.path.startsWith('/en')
+  const map = isZh ? pathMap : enMap
+
+  for (const [p, info] of Object.entries(map)) {
+    if (path === p || path.startsWith(p + '/')) {
+      if (info.parent) {
+        const parent = map[info.parent]
+        if (parent) crumbs.push({ title: parent.title, path: info.parent })
+      }
+      crumbs.push({ title: info.title, path: p })
+      break
+    }
+  }
+
+  return crumbs
+})
 
 // 超级管理员 bypass 所有菜单权限检查
+// 新增：根据 visibleModules 模块可见性动态控制
 const canAccessEmployeeManagementComputed = computed(() =>
-  isSuperAdmin.value || userStore.hasPermission('employee.manage.view')
+  isSuperAdmin.value || userStore.canAccessModule('employees')
 )
 const canAccessFinanceComputed = computed(() =>
-  isSuperAdmin.value || userStore.hasAnyPermission(['finance.report.view.basic', 'finance.report.view.sensitive'])
+  isSuperAdmin.value || userStore.canAccessModule('finance')
 )
 const canAccessCRMComputed = computed(() =>
-  isSuperAdmin.value || userStore.hasAnyPermission(['crm.customer.view', 'crm.lead.view', 'crm.stats.view'])
+  isSuperAdmin.value || userStore.canAccessModule('crm')
 )
+// 文件管理：使用统一的 canAccessModule('files') 检查，与权限体系一致
 const canAccessFilesComputed = computed(() =>
-  // 文件管理：所有登录用户可访问（无需特定权限）
-  isSuperAdmin.value || userStore.isLoggedIn
+  isSuperAdmin.value || userStore.canAccessModule('files')
 )
 const canAccessSalesComputed = computed(() =>
-  isSuperAdmin.value || userStore.hasAnyPermission(['crm.customer.view', 'crm.lead.view'])
+  isSuperAdmin.value || userStore.canAccessModule('sales_workbench')
 )
 const canAccessHRComputed = computed(() =>
-  isSuperAdmin.value || userStore.hasAnyPermission([
-    'hr.recruitment.board.view', 'hr.attendance.view', 'hr.payroll.view',
-    'hr.performance.view', 'hr.event.view',
-  ])
+  isSuperAdmin.value || userStore.canAccessModule('hr')
 )
 
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
@@ -215,7 +276,14 @@ const handleCommand = (command: string) => {
 let resizeHandler: (() => void) | null = null
 
 // 预加载常用页面 chunk（避免首次切换“等加载”的卡顿感）
-onMounted(() => {
+onMounted(async () => {
+  // 页面加载时强制刷新权限数据，避免 localStorage 中残留的旧数据导致菜单错误
+  try {
+    await userStore.refreshPermissions()
+  } catch {
+    // 静默忽略
+  }
+
   const handleResize = () => {
     isMobile.value = window.innerWidth <= 768
     if (isMobile.value) {
@@ -353,6 +421,20 @@ onBeforeUnmount(() => {
         color: var(--el-color-primary);
       }
     }
+  }
+}
+
+.page-breadcrumb {
+  margin-bottom: 16px;
+  padding: 0 4px;
+  font-size: 13px;
+
+  :deep(.el-breadcrumb__item) {
+    font-size: 13px;
+    .el-breadcrumb__inner { color: #909399; }
+    .el-breadcrumb__inner a { color: #409eff !important; font-weight: 400; }
+    .el-breadcrumb__inner a:hover { color: #66b1ff !important; }
+    &:last-child .el-breadcrumb__inner { color: #303133; font-weight: 500; }
   }
 }
 

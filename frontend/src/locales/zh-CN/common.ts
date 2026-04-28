@@ -8,6 +8,7 @@ export default {
   search: '搜索',
   add: '添加',
   edit: '编辑',
+  view: '查看',
   delete: '删除',
   save: '保存',
   download: '下载',
@@ -50,6 +51,7 @@ export default {
   createSuccess: '创建成功',
   updateSuccess: '更新成功',
   saveSuccess: '保存成功',
+  submitSuccess: '提交成功',
   deleteSuccess: '删除成功',
   operations: '操作',
   to: '至',
@@ -58,6 +60,7 @@ export default {
   backToHome: '返回首页',
   goBack: '返回上一页',
   noPermission: '您没有权限访问此页面',
+  noModuleAccess: '您没有权限访问此模块',
   userInfoLoadFailed: '用户信息加载失败，请重新登录',
   featureComingSoon: '功能开发中，敬请期待',
   upload: '上传',
@@ -66,5 +69,35 @@ export default {
   imageTypeLimit: '只能上传 JPG/PNG/GIF/WEBP 图片',
   imageSizeLimit: '图片大小不能超过 10MB',
   clear: '清空',
+  allDepartments: '全部部门',
+  remarks: '备注',
+
+  // 磁盘/存储配置
+  driveLetter: '盘符',
+  systemName: '系统名称',
+  enableQuotaScan: '开启容量扫描',
+  workspaceStorageConfig: '工作空间存储配置',
+  module: '模块',
+  rootDirectory: '根目录（文件夹）',
+  driveTip: '启用的盘将在"文件管理"页面展示；开启容量扫描后，系统会对该盘进行递归统计，适合部署到共享盘电脑后再打开，本地开发可以保持关闭以避免卡顿。',
+  driveTipShort: '开启容量扫描后，系统会对该盘进行递归统计。',
+
+  // 权限管理
+  'permissions.summaryTitle': '当前权限清单',
+  'permissions.assignSuccess': '权限分配成功，当前会话权限已刷新',
+
+  // 欢迎鼓励语（从首页独立出来，避免嵌套找不到）
+  encouragement: [
+    '工作要努力，生活要快乐',
+    '今天也要加油哦',
+    '保持微笑，迎接新的挑战',
+    '每一天都是新的开始',
+    '相信自己，你能行',
+    '保持热情，追求卓越',
+    '让每一天都充满意义'
+  ],
+
+  // 日期
+  date: '日期',
 }
 

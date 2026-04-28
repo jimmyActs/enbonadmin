@@ -135,22 +135,29 @@
             <div v-if="getEmployeesByWorkStatus('leave').length === 0" class="empty-text">
               {{ $t('workgroup.noEmployees') }}
             </div>
-            <div
-              v-for="emp in getEmployeesByWorkStatus('leave')"
-              :key="emp.id"
-              class="popover-employee-item"
-            >
-              <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                {{ getEmployeeDisplayName(emp).charAt(0) }}
-              </el-avatar>
-              <div class="popover-employee-info">
-                <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
-                <div class="popover-employee-department">{{ getDepartmentName(emp.department || '') }}</div>
-              </div>
-            </div>
+            <el-row v-else :gutter="12">
+              <el-col
+                v-for="emp in getEmployeesByWorkStatus('leave')"
+                :key="emp.id"
+                :span="12"
+              >
+                <div class="popover-employee-item">
+                  <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
+                    {{ getEmployeeDisplayName(emp).charAt(0) }}
+                  </el-avatar>
+                  <div class="popover-employee-info">
+                    <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
+                    <div class="popover-employee-location">
+                      <el-icon class="location-icon"><OfficeBuilding /></el-icon>
+                      <span class="location-text">{{ getDepartmentName(emp.department || '') }}</span>
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
           </div>
         </el-popover>
-        
+
         <el-popover
           v-if="statistics?.workStatus"
           placement="bottom"
@@ -173,26 +180,33 @@
             <div v-if="getEmployeesByWorkStatus('meeting').length === 0" class="empty-text">
               {{ $t('workgroup.noEmployees') }}
             </div>
-            <div
-              v-for="emp in getEmployeesByWorkStatus('meeting')"
-              :key="emp.id"
-              class="popover-employee-item"
-            >
-              <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                {{ getEmployeeDisplayName(emp).charAt(0) }}
-              </el-avatar>
-              <div class="popover-employee-info">
-                <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
-                <div class="popover-employee-department">{{ getDepartmentName(emp.department || '') }}</div>
-              </div>
-            </div>
+            <el-row v-else :gutter="12">
+              <el-col
+                v-for="emp in getEmployeesByWorkStatus('meeting')"
+                :key="emp.id"
+                :span="12"
+              >
+                <div class="popover-employee-item">
+                  <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
+                    {{ getEmployeeDisplayName(emp).charAt(0) }}
+                  </el-avatar>
+                  <div class="popover-employee-info">
+                    <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
+                    <div class="popover-employee-location">
+                      <el-icon class="location-icon"><OfficeBuilding /></el-icon>
+                      <span class="location-text">{{ getDepartmentName(emp.department || '') }}</span>
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
           </div>
         </el-popover>
-        
+
         <el-popover
           v-if="statistics?.workStatus"
           placement="bottom"
-          :width="300"
+          :width="420"
           trigger="hover"
           popper-class="work-status-popover"
         >
@@ -211,19 +225,26 @@
             <div v-if="getEmployeesByWorkStatus('busy').length === 0" class="empty-text">
               {{ $t('workgroup.noEmployees') }}
             </div>
-            <div
-              v-for="emp in getEmployeesByWorkStatus('busy')"
-              :key="emp.id"
-              class="popover-employee-item"
-            >
-              <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
-                {{ getEmployeeDisplayName(emp).charAt(0) }}
-              </el-avatar>
-              <div class="popover-employee-info">
-                <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
-                <div class="popover-employee-department">{{ getDepartmentName(emp.department || '') }}</div>
-              </div>
-            </div>
+            <el-row v-else :gutter="12">
+              <el-col
+                v-for="emp in getEmployeesByWorkStatus('busy')"
+                :key="emp.id"
+                :span="12"
+              >
+                <div class="popover-employee-item">
+                  <el-avatar :size="32" :src="getAvatarUrl(emp)" class="popover-avatar">
+                    {{ getEmployeeDisplayName(emp).charAt(0) }}
+                  </el-avatar>
+                  <div class="popover-employee-info">
+                    <div class="popover-employee-name">{{ getEmployeeDisplayName(emp) }}</div>
+                    <div class="popover-employee-location">
+                      <el-icon class="location-icon"><OfficeBuilding /></el-icon>
+                      <span class="location-text">{{ getDepartmentName(emp.department || '') }}</span>
+                    </div>
+                  </div>
+                </div>
+              </el-col>
+            </el-row>
           </div>
         </el-popover>
       </div>
@@ -522,6 +543,7 @@ import { getAvatarUrl as getEmployeeAvatarUrl } from '../api/users'
 import { useUserStore } from '../store/user'
 import { useEmployeeDisplayName } from '../utils/employee'
 import { getOnlineUserIds } from '../api/online'
+import { getDepartmentLabel, getPositionLabel } from '../utils/organization'
 
 const { t, locale } = useI18n()
 const userStore = useUserStore()
@@ -558,29 +580,22 @@ const getAvatarUrl = (employee: Employee): string => {
   return ''
 }
 
-const departmentNames: Record<string, { zh: string; en: string }> = {
-  planning: { zh: '品牌管理中心', en: 'Brand Management Center' },
-  sales: { zh: '销售部', en: 'Sales' },
-  tech: { zh: '技术部', en: 'Technology' },
-  finance: { zh: '财务部', en: 'Finance' },
-  hr: { zh: '人力资源部', en: 'Human Resources' },
-  domestic: { zh: '国内区', en: 'Domestic' },
-  management: { zh: '总经办', en: 'Management' },
-}
-
-// 销售战区名称映射，复用员工管理里的配置
-const teams = computed(() => [
-  { label: t('employees.teams.sales_japan_korea'), value: 'sales_japan_korea' }, // 销售-日韩组
-  { label: t('employees.teams.sales_middle_east'), value: 'sales_middle_east' }, // 销售-中东组
-  { label: t('employees.teams.sales_india'), value: 'sales_india' }, // 销售-印度组
-  { label: t('employees.teams.sales_europe_asia'), value: 'sales_europe_asia' }, // 销售-欧亚组
-])
-
+// 部门名称使用共享配置
 const getDepartmentName = (dept: string): string => {
-  const deptInfo = departmentNames[dept]
-  if (!deptInfo) return dept
-  return locale.value === 'en-US' ? deptInfo.en : deptInfo.zh
+  // 处理空字符串或未分配部门的情况
+  if (!dept || dept === 'null' || dept === 'undefined') {
+    return t('workgroup.noDepartment')
+  }
+  return getDepartmentLabel(dept, locale.value === 'en-US' ? 'en' : 'zh')
 }
+
+// 销售战区名称映射
+const teams = computed(() => [
+  { label: t('employees.teams.sales_japan_korea'), value: 'sales_japan_korea' },
+  { label: t('employees.teams.sales_middle_east'), value: 'sales_middle_east' },
+  { label: t('employees.teams.sales_india'), value: 'sales_india' },
+  { label: t('employees.teams.sales_europe_asia'), value: 'sales_europe_asia' },
+])
 
 const getTeamName = (team?: string): string => {
   if (!team) return '-'
@@ -617,37 +632,10 @@ const destinationLabelMap: Record<string, string> = {
   canada: '加拿大 / Canada',
 }
 
-// 职位名称映射：支持职位编码 -> 多语言名称，兼容旧数据直接显示
-const positionNames: Record<string, { zh: string; en: string }> = {
-  recruitment_specialist: { zh: '招聘专员', en: 'Recruitment Specialist' },
-  admin_specialist: { zh: '行政专员', en: 'Administrative Specialist' },
-  front_desk_receptionist: { zh: '行政前台', en: 'Front Desk Receptionist' },
-  director: { zh: '总监', en: 'Director' },
-  sales: { zh: '销售', en: 'Sales' },
-  supervisor: { zh: '主管', en: 'Supervisor' },
-  graphic_designer: { zh: '平面设计师', en: 'Graphic Designer' },
-  design_assistant: { zh: '设计助理', en: 'Design Assistant' },
-  frontend_engineer: { zh: '前端开发工程师', en: 'Front-end Developer' },
-  after_sales_engineer: { zh: '售后工程师', en: 'After-sales Engineer' },
-  quality_specialist: { zh: '品质', en: 'Quality Specialist' },
-  purchasing_specialist: { zh: '采购', en: 'Purchasing Specialist' },
-  accountant_cashier: { zh: '会计出纳', en: 'Accountant & Cashier' },
-  finance_specialist: { zh: '财务专员', en: 'Finance Specialist' },
-  ceo: { zh: 'CEO', en: 'CEO' },
-  chairman: { zh: '董事长', en: 'Chairman' },
-  deputy_general_manager: { zh: '副总经理', en: 'Deputy General Manager' },
-  special_shape_bu_gm: { zh: '异形事业部总经理', en: 'GM of Special-shaped Business Unit' },
-  new_media_operator: { zh: '新媒体运营', en: 'New Media Operator' },
-  copywriter: { zh: '文案专员', en: 'Copywriter' },
-  modeling_3d_artist: { zh: '3D建模渲染师', en: '3D Modeling & Rendering Artist' },
-  merchandiser: { zh: '跟单', en: 'Merchandiser' },
-}
-
+// 职位名称使用共享配置
 const getPositionName = (position?: string | null): string => {
   if (!position) return t('workgroup.noPosition')
-  const info = positionNames[position]
-  if (!info) return position
-  return locale.value === 'en-US' ? info.en : info.zh
+  return getPositionLabel(position, locale.value === 'en-US' ? 'en' : 'zh')
 }
 
 // 计算当前登录用户所属部门（用于将该部门置顶展示）
@@ -1336,41 +1324,52 @@ onBeforeUnmount(() => {
       }
 
       .employees-list {
-        // 员工区域采用响应式网格化布局，在一张部门大卡片里最多可放多列小卡片
+        // 响应式网格布局，一行可显示更多卡片
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-        gap: 12px 16px;
+        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        gap: 12px;
+        align-items: start;
 
         .employee-item {
           display: flex;
+          flex-direction: column;
           align-items: center;
-          gap: 12px;
-          padding: 12px;
+          gap: 8px;
+          padding: 16px 12px;
           border-radius: 12px;
-          transition: background-color 0.2s ease;
+          transition: all 0.2s ease;
+          text-align: center;
+          background: #fafafa;
+          border: 1px solid transparent;
 
           &:hover {
-            background: #f5f5f7;
+            background: #fff;
+            border-color: #e5e5e7;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transform: translateY(-2px);
           }
 
           .employee-avatar {
-            background: #007aff;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             font-weight: 600;
             flex-shrink: 0;
-            border: 2px solid #e5e5e7;
+            border: 2px solid #fff;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
             transition: all 0.3s ease;
 
             &.offline {
               filter: grayscale(100%);
-              opacity: 0.6;
+              opacity: 0.5;
               border-color: #d1d1d6;
+              box-shadow: none;
             }
           }
 
           .employee-info {
             flex: 1;
             min-width: 0;
+            width: 100%;
             transition: all 0.3s ease;
 
             &.offline {
@@ -1379,51 +1378,54 @@ onBeforeUnmount(() => {
               .employee-name {
                 color: #86868b;
               }
-
-              .employee-details {
-                color: #a8a8aa;
-              }
             }
 
             .employee-name-row {
               display: flex;
-              align-items: center;
-              gap: 8px;
-              margin-bottom: 4px;
-              flex-wrap: wrap;
-              
+              justify-content: center;
+              margin-bottom: 6px;
+
               .employee-name {
-                font-size: 15px;
+                font-size: 13px;
                 font-weight: 600;
                 color: #1d1d1f;
                 letter-spacing: -0.01em;
                 transition: color 0.3s ease;
-              }
-
-              .work-status-tag {
-                border-radius: 8px;
-                font-weight: 500;
-                font-size: 11px;
-                padding: 2px 8px;
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                
-                .work-status-icon {
-                  font-size: 12px;
-                }
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100%;
               }
             }
 
+            // 紧凑上下布局：职位、部门
             .employee-details {
               display: flex;
+              flex-direction: column;
               align-items: center;
-              gap: 6px;
-              font-size: 12px;
-              color: #86868b;
+              gap: 4px;
+              font-size: 11px;
+              line-height: 1.4;
+
+              .employee-position {
+                color: #007aff;
+                font-weight: 500;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100%;
+              }
 
               .employee-separator {
-                color: #d1d1d6;
+                display: none;
+              }
+
+              .employee-department {
+                color: #86868b;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 100%;
               }
             }
           }
@@ -1431,23 +1433,25 @@ onBeforeUnmount(() => {
           .employee-actions {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-shrink: 0;
 
             .status-tag {
               border-radius: 8px;
               font-weight: 500;
+              font-size: 10px;
               display: inline-flex;
               align-items: center;
-              gap: 4px;
+              gap: 3px;
+              padding: 2px 6px;
 
               .work-status-icon-small {
-                font-size: 12px;
+                font-size: 11px;
               }
             }
 
             .action-button {
-              padding: 6px;
+              padding: 4px;
               color: #86868b;
               transition: color 0.2s ease;
 
@@ -1735,75 +1739,91 @@ onBeforeUnmount(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
 
   .employee-popover-list {
-  max-height: 320px;
-  overflow-y: auto;
+    max-height: 360px;
+    overflow-y: auto;
 
-  .empty-text {
-    text-align: center;
-    color: #86868b;
-    font-size: 13px;
-    padding: 20px 0;
-  }
-
-  .popover-employee-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    padding: 12px 10px;
-    border-radius: 12px;
-    background: #f8f9fb;
-    border: 1px solid #eceef2;
-    transition: all 0.2s ease;
-
-    &:hover {
-      background: #ffffff;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      transform: translateY(-1px);
-    }
-
-    .popover-avatar {
-      background: #007aff;
-      color: white;
-      font-weight: 600;
-      flex-shrink: 0;
-      margin-bottom: 6px;
-    }
-
-    .popover-employee-info {
+    .empty-text {
       text-align: center;
-      width: 100%;
+      color: #86868b;
+      font-size: 13px;
+      padding: 20px 0;
+    }
 
-      .popover-employee-name {
-        font-size: 14px;
-        font-weight: 500;
-        color: #1d1d1f;
-        margin-bottom: 4px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
+    .el-row {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    .el-col {
+      padding: 4px 6px !important;
+    }
+
+    .popover-employee-item {
+      display: flex;
+      flex-direction: row;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f8f9fb;
+      border: 1px solid #eceef2;
+      transition: all 0.2s ease;
+      gap: 10px;
+
+      &:hover {
+        background: #ffffff;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+        transform: translateY(-1px);
+        border-color: #d1d5db;
       }
 
-      .popover-employee-location {
-        display: inline-flex;
-        align-items: center;
-        gap: 4px;
-        font-size: 12px;
-        color: #86868b;
+      .popover-avatar {
+        background: linear-gradient(135deg, #007aff 0%, #0051d5 100%);
+        color: white;
+        font-weight: 600;
+        flex-shrink: 0;
+        border: 2px solid rgba(255, 255, 255, 0.8);
+        box-shadow: 0 2px 6px rgba(0, 122, 255, 0.25);
+      }
 
-        .location-icon {
-          font-size: 12px;
-          color: #d1d1d6;
-        }
+      .popover-employee-info {
+        flex: 1;
+        min-width: 0;
+        text-align: left;
 
-        .location-text {
-          max-width: 100%;
+        .popover-employee-name {
+          font-size: 13px;
+          font-weight: 600;
+          color: #1d1d1f;
+          margin-bottom: 3px;
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          line-height: 1.3;
+        }
+
+        .popover-employee-location {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 11px;
+          color: #86868b;
+          line-height: 1.3;
+
+          .location-icon {
+            font-size: 11px;
+            color: #b0b0b5;
+            flex-shrink: 0;
+          }
+
+          .location-text {
+            max-width: 140px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
         }
       }
     }
-  }
   }
 }
 
@@ -1820,6 +1840,11 @@ onBeforeUnmount(() => {
         width: 100%;
       }
     }
+
+    .employees-list {
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 10px;
+    }
   }
 }
 
@@ -1829,7 +1854,7 @@ onBeforeUnmount(() => {
 
     .statistics-card {
       .statistics-grid {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(2, 1fr);
       }
     }
 
@@ -1838,18 +1863,36 @@ onBeforeUnmount(() => {
 
       .department-card {
         .employees-list {
-          grid-template-columns: 1fr;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
 
           .employee-item {
             flex-direction: column;
-            align-items: flex-start;
-            gap: 8px;
-
-            .employee-actions {
-              width: 100%;
-              justify-content: flex-end;
-            }
+            align-items: center;
+            gap: 6px;
+            padding: 12px 8px;
           }
+        }
+      }
+    }
+  }
+}
+
+@media (max-width: 480px) {
+  .workgroup-container {
+    .employees-list {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+
+      .employee-item {
+        padding: 12px 6px;
+
+        .employee-name {
+          font-size: 12px !important;
+        }
+
+        .employee-details {
+          font-size: 10px !important;
         }
       }
     }

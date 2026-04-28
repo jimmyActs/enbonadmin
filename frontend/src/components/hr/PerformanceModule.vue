@@ -40,6 +40,14 @@
           <div class="stat-value">{{ stats.ratingDistribution?.C || 0 }}</div>
           <div class="stat-label">C {{ $t('hr.performance.level') }}</div>
         </div>
+        <div class="stat-item">
+          <div class="stat-value warning">{{ stats.ratingDistribution?.D || 0 }}</div>
+          <div class="stat-label">D {{ $t('hr.performance.level') }}</div>
+        </div>
+        <div class="stat-item">
+          <div class="stat-value danger">{{ stats.ratingDistribution?.E || 0 }}</div>
+          <div class="stat-label">E {{ $t('hr.performance.level') }}</div>
+        </div>
       </div>
 
       <!-- 筛选区域 -->
@@ -85,18 +93,18 @@
         <el-table-column prop="period" :label="$t('hr.performance.period')" width="120" />
         <el-table-column prop="selfScore" :label="$t('hr.performance.selfScore')" width="100">
           <template #default="{ row }">
-            {{ row.selfScore?.toFixed(1) || '-' }}
+            {{ typeof row.selfScore === 'number' ? row.selfScore.toFixed(1) : (parseFloat(row.selfScore)?.toFixed(1) || '-') }}
           </template>
         </el-table-column>
         <el-table-column prop="supervisorScore" :label="$t('hr.performance.supervisorScore')" width="100">
           <template #default="{ row }">
-            {{ row.supervisorScore?.toFixed(1) || '-' }}
+            {{ typeof row.supervisorScore === 'number' ? row.supervisorScore.toFixed(1) : (parseFloat(row.supervisorScore)?.toFixed(1) || '-') }}
           </template>
         </el-table-column>
         <el-table-column prop="finalScore" :label="$t('hr.performance.finalScore')" width="100">
           <template #default="{ row }">
-            <span class="score-value" :class="getScoreClass(row.finalScore)">
-              {{ row.finalScore?.toFixed(1) || '-' }}
+            <span class="score-value" :class="getScoreClass(typeof row.finalScore === 'number' ? row.finalScore : parseFloat(row.finalScore) || 0)">
+              {{ typeof row.finalScore === 'number' ? row.finalScore.toFixed(1) : (parseFloat(row.finalScore)?.toFixed(1) || '-') }}
             </span>
           </template>
         </el-table-column>
@@ -448,7 +456,7 @@ const loadData = async () => {
 
     const res = await getPerformanceList(params)
     list.value = res.data
-    pagination.total = res.total
+    pagination.total = res.total ?? 0
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))
   } finally {

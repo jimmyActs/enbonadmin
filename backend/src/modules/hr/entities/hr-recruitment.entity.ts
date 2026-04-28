@@ -34,6 +34,12 @@ export class HrRecruitmentDemand {
   reason: string;
 
   @Column({ nullable: true })
+  urgency: string; // urgent | normal | low
+
+  @Column({ nullable: true })
+  expectedDate: string; // 预计到岗日期
+
+  @Column({ nullable: true })
   requesterId: number;
 
   @Column({ nullable: true })
@@ -53,6 +59,9 @@ export class HrRecruitmentDemand {
 
   @Column({ type: 'varchar', length: 50, default: 'pending' })
   status: RecruitmentDemandStatus;
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
 
   @Column({ nullable: true })
   createdBy: number;
@@ -134,6 +143,9 @@ export class HrCandidate {
 
   @Column({ nullable: true })
   rejectReason: string;
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
 
   @Column({ nullable: true })
   notes: string;

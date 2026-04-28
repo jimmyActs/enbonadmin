@@ -39,6 +39,18 @@
             {{ $t('sales.modules.review') }}
           </template>
         </el-tab-pane>
+        <el-tab-pane name="shipments">
+          <template #label>
+            <el-icon><Box /></el-icon>
+            {{ $t('sales.modules.shipments') }}
+          </template>
+        </el-tab-pane>
+        <el-tab-pane name="email">
+          <template #label>
+            <el-icon><Message /></el-icon>
+            {{ $t('sales.modules.email') }}
+          </template>
+        </el-tab-pane>
       </el-tabs>
     </div>
 
@@ -61,22 +73,36 @@
     <div v-show="activeTab === 'review'" class="tab-content fade-in-up">
       <ReviewModule ref="reviewRef" />
     </div>
+
+    <!-- 出货文件 -->
+    <div v-show="activeTab === 'shipments'" class="tab-content fade-in-up">
+      <ShipmentModule ref="shipmentsRef" />
+    </div>
+
+    <!-- 邮件往来（销售日常工作台） -->
+    <div v-show="activeTab === 'email'" class="tab-content fade-in-up">
+      <EmailModule ref="emailRef" />
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { Document, Aim, User, DataLine, Refresh } from '@element-plus/icons-vue'
+import { Document, Aim, User, DataLine, Refresh, Box, Message } from '@element-plus/icons-vue'
 import QuotationModule from '../components/sales/QuotationModule.vue'
 import TargetModule from '../components/sales/TargetModule.vue'
 import CustomerModule from '../components/sales/CustomerModule.vue'
 import ReviewModule from '../components/sales/ReviewModule.vue'
+import ShipmentModule from '../components/crm/ShipmentModule.vue'
+import EmailModule from '../components/crm/EmailModule.vue'
 
 const activeTab = ref('quotation')
 const quotationRef = ref<InstanceType<typeof QuotationModule>>()
 const targetsRef = ref<InstanceType<typeof TargetModule>>()
 const customersRef = ref<InstanceType<typeof CustomerModule>>()
 const reviewRef = ref<InstanceType<typeof ReviewModule>>()
+const shipmentsRef = ref<InstanceType<typeof ShipmentModule>>()
+const emailRef = ref<InstanceType<typeof EmailModule>>()
 
 const onTabChange = (tab: string) => {
   activeTab.value = tab
@@ -88,6 +114,8 @@ const loadAll = () => {
     case 'targets': targetsRef.value?.reload(); break
     case 'customers': customersRef.value?.reload(); break
     case 'review': reviewRef.value?.reload(); break
+    case 'shipments': shipmentsRef.value?.reload(); break
+    case 'email': emailRef.value?.reload(); break
   }
 }
 </script>

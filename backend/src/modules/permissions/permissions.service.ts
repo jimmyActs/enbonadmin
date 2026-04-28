@@ -1,13 +1,18 @@
-import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Injectable, OnModuleInit, Inject, forwardRef, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import { Permission } from './entities/permission.entity';
 import { Role } from './entities/role.entity';
 import { RolePermission, DataScope } from './entities/role-permission.entity';
-import { UserRole } from './entities/user-role.entity';
+import { UserRole as UserRoleEntity } from './entities/user-role.entity';
+import { UserRole as UserRoleEnum } from '../users/entities/user.entity';
+import { UserExtraPermission } from './entities/user-extra-permission.entity';
+import { PermissionEngineService } from './permission-engine.service';
 
 @Injectable()
 export class PermissionsService implements OnModuleInit {
+  private readonly logger = new Logger(PermissionsService.name);
+
   constructor(
     @InjectRepository(Permission)
     private readonly permissionRepository: Repository<Permission>,
@@ -15,12 +20,18 @@ export class PermissionsService implements OnModuleInit {
     private readonly roleRepository: Repository<Role>,
     @InjectRepository(RolePermission)
     private readonly rolePermissionRepository: Repository<RolePermission>,
-    @InjectRepository(UserRole)
-    private readonly userRoleRepository: Repository<UserRole>,
+    @InjectRepository(UserRoleEntity)
+    private readonly userRoleRepository: Repository<UserRoleEntity>,
+    @InjectRepository(UserExtraPermission)
+    private readonly userExtraPermRepository: Repository<UserExtraPermission>,
+    @Inject(forwardRef(() => PermissionEngineService))
+    private readonly permissionEngineService: PermissionEngineService,
   ) {}
 
   async onModuleInit() {
     await this.seedPermissionsAndRoles();
+    // 初始化岗位和部门配置
+    await this.permissionEngineService.seedPositionAndDepartmentConfig();
   }
 
   /**
@@ -126,6 +137,7 @@ export class PermissionsService implements OnModuleInit {
       { code: 'crm.lead.edit', name: '编辑商机', module: 'crm', parentId: null },
       { code: 'crm.lead.delete', name: '删除商机', module: 'crm', parentId: null },
       { code: 'crm.lead.assign', name: '分配商机负责人', module: 'crm', parentId: null },
+      { code: 'crm.lead.pool', name: '商机公海认领', module: 'crm', parentId: null },
       { code: 'crm.target.view', name: '查看销售目标', module: 'crm', parentId: null },
       { code: 'crm.target.manage', name: '管理销售目标', module: 'crm', parentId: null },
       { code: 'crm.email.view', name: '查看邮件往来', module: 'crm', parentId: null },
@@ -133,6 +145,27 @@ export class PermissionsService implements OnModuleInit {
       { code: 'crm.stats.view', name: '查看CRM统计数据', module: 'crm', parentId: null },
       { code: 'crm.stats.team', name: '查看团队统计', module: 'crm', parentId: null },
       { code: 'crm.inquirySource.manage', name: '管理询盘来源配置', module: 'crm', parentId: null },
+      // 培训管理
+      { code: 'hr.training.view', name: '查看培训课程与计划', module: 'hr', parentId: null },
+      { code: 'hr.training.create', name: '创建培训课程', module: 'hr', parentId: null },
+      { code: 'hr.training.edit', name: '编辑培训课程', module: 'hr', parentId: null },
+      { code: 'hr.training.plan.manage', name: '管理培训计划', module: 'hr', parentId: null },
+      { code: 'hr.training.learn', name: '参与培训学习与考试', module: 'hr', parentId: null },
+      { code: 'hr.training.evaluate', name: '评价培训效果', module: 'hr', parentId: null },
+      { code: 'hr.training.stats', name: '查看培训统计', module: 'hr', parentId: null },
+      { code: 'hr.training.roi', name: '查看培训ROI分析', module: 'hr', parentId: null },
+      // 试用期管理
+      { code: 'hr.probation.view', name: '查看试用期记录', module: 'hr', parentId: null },
+      { code: 'hr.probation.manage', name: '管理试用期', module: 'hr', parentId: null },
+      { code: 'hr.probation.evaluate', name: '评定试用期', module: 'hr', parentId: null },
+      // 离职管理
+      { code: 'hr.exit.view', name: '查看离职记录', module: 'hr', parentId: null },
+      { code: 'hr.exit.manage', name: '管理离职流程', module: 'hr', parentId: null },
+      { code: 'hr.exit.stats', name: '查看离职统计数据', module: 'hr', parentId: null },
+      // 薪酬预算与成本
+      { code: 'hr.payroll.budget.manage', name: '管理薪酬预算', module: 'hr', parentId: null },
+      { code: 'hr.payroll.cost.view', name: '查看薪酬成本统计', module: 'hr', parentId: null },
+      { code: 'hr.payroll.alert.manage', name: '管理薪酬超支提醒', module: 'hr', parentId: null },
     ];
 
     // === 1.1 按 code 幂等插入/更新权限 ===
@@ -332,6 +365,10 @@ export class PermissionsService implements OnModuleInit {
       'hr.payroll.import',
       'hr.payroll.export',
       'hr.payroll.approve',
+      // 薪酬预算
+      'hr.payroll.budget.manage',
+      'hr.payroll.cost.view',
+      'hr.payroll.alert.manage',
       // 绩效
       'hr.performance.view',
       'hr.performance.self',
@@ -342,6 +379,23 @@ export class PermissionsService implements OnModuleInit {
       'hr.event.create',
       'hr.event.edit',
       'hr.event.delete',
+      // 培训管理
+      'hr.training.view',
+      'hr.training.create',
+      'hr.training.edit',
+      'hr.training.plan.manage',
+      'hr.training.learn',
+      'hr.training.evaluate',
+      'hr.training.stats',
+      'hr.training.roi',
+      // 试用期管理
+      'hr.probation.view',
+      'hr.probation.manage',
+      'hr.probation.evaluate',
+      // 离职管理
+      'hr.exit.view',
+      'hr.exit.manage',
+      'hr.exit.stats',
     ];
     hrDirectorPermCodes.forEach((code) => {
       addRolePerm('hr_director_role', code, DataScope.ORG);
@@ -374,7 +428,7 @@ export class PermissionsService implements OnModuleInit {
 
     // 3.5 销售部门负责人
     const salesDeptPermCodes = [
-      'employee.manage.view',
+      // 不再分配 employee.manage.view（销售不应有人员管理权限）
       'report.team.view',
       'files.drive.view',
       'report.my.view',
@@ -394,6 +448,7 @@ export class PermissionsService implements OnModuleInit {
       'crm.stats.team',
       'crm.inquirySource.manage',
       'crm.customer.pool',
+      'crm.lead.pool',
     ];
     salesDeptPermCodes.forEach((code) => {
       addRolePerm('sales_dept_manager_role', code, DataScope.DEPARTMENT);
@@ -464,32 +519,92 @@ export class PermissionsService implements OnModuleInit {
   }
 
   /**
-   * 获取指定用户的权限code列表
+   * 获取指定用户的权限code列表（合并两套来源）
+   * 1. RBAC：角色模板 → role_permission → permission
+   * 2. PositionEngine：user_extra_permission（岗位自动分配 + 手动分配）
    */
   async getUserPermissions(userId: number): Promise<string[]> {
+    // 来源1：RBAC 角色模板
     const userRoles = await this.userRoleRepository.find({
       where: { userId },
     });
 
-    if (!userRoles.length) {
-      return [];
+    let rbacPermCodes: string[] = [];
+    if (userRoles.length > 0) {
+      const roleIds = userRoles.map((ur) => ur.roleId);
+      const rolePerms = await this.rolePermissionRepository.find({
+        where: { roleId: In(roleIds) },
+      });
+      if (rolePerms.length > 0) {
+        const permIds = rolePerms.map((rp) => rp.permissionId);
+        const perms = await this.permissionRepository.find({
+          where: { id: In(permIds) },
+        });
+        rbacPermCodes = perms.map((p) => p.code);
+      }
     }
 
-    const roleIds = userRoles.map((ur) => ur.roleId);
-    const rolePerms = await this.rolePermissionRepository.find({
-      where: { roleId: In(roleIds) },
+    // 来源2：user_extra_permission（岗位权限 + 手动分配权限）
+    const extraPerms = await this.userExtraPermRepository.find({
+      where: { userId, grantType: 'GRANT' as any },
     });
+    const extraPermCodes = extraPerms.map((p) => p.permissionCode);
 
-    if (!rolePerms.length) {
-      return [];
+    // 合并去重（两套来源的权限码取并集）
+    const allCodes = [...rbacPermCodes, ...extraPermCodes];
+    this.logger.debug(`getUserPermissions(${userId}): RBAC=${rbacPermCodes.length}条, extra=${extraPermCodes.length}条, 合并=${allCodes.length}条`);
+    return [...new Set(allCodes)];
+  }
+
+  /**
+   * 检查用户是否拥有超级管理员身份
+   * 判定条件（满足任一即可）：
+   * 1. 用户的 role 字段为 'super_admin'（系统身份）
+   * 2. 用户绑定了 isSuperAdmin: true 的角色模板（权限身份）
+   *
+   * @param userId 用户ID
+   * @param userRole 用户的 role 字段值（可选，用于快速判断）
+   */
+  async isUserSuperAdmin(userId: number, userRole?: string): Promise<boolean> {
+    // 条件1：系统身份是超级管理员
+    if (userRole === UserRoleEnum.SUPER_ADMIN) {
+      return true;
     }
 
-    const permIds = rolePerms.map((rp) => rp.permissionId);
-    const perms = await this.permissionRepository.find({
-      where: { id: In(permIds) },
+    // 条件2：绑定了超级管理员角色模板
+    const userRoles = await this.userRoleRepository.find({
+      where: { userId },
+      relations: ['role'],
     });
 
-    return perms.map((p) => p.code);
+    for (const ur of userRoles) {
+      if (ur.role?.isSuperAdmin === true) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * 获取用户的完整权限上下文（用于前端刷新权限）
+   * 包含：权限码列表 + isSuperAdmin 标识
+   */
+  async getUserPermissionContext(userId: number, userRole?: string): Promise<{
+    isSuperAdmin: boolean;
+    permissions: string[];
+  }> {
+    const isSuperAdmin = await this.isUserSuperAdmin(userId, userRole);
+
+    let permissions: string[];
+    if (isSuperAdmin) {
+      // 超级管理员获取全部权限码
+      permissions = await this.getAllPermissionCodes();
+    } else {
+      permissions = await this.getUserPermissions(userId);
+    }
+
+    return { isSuperAdmin, permissions };
   }
 
   /**

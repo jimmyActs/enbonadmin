@@ -17,6 +17,9 @@
             <el-button type="primary" :icon="Plus" @click="handleAdd">
               {{ $t('hr.attendance.add') }}
             </el-button>
+            <el-button :icon="Clock" @click="showSupplementary = true">
+              {{ $t('hr.attendance.supplementary') }}
+            </el-button>
           </div>
         </div>
       </template>
@@ -136,10 +139,24 @@
     >
       <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
         <el-form-item :label="$t('hr.attendance.employeeName')" prop="employeeName">
-          <el-input v-model="form.employeeName" />
+          <el-select v-model="form.employeeId" filterable clearable :placeholder="$t('hr.attendance.selectEmployee')" style="width: 100%;" @change="handleEmployeeSelect">
+            <el-option
+              v-for="emp in employeeOptions"
+              :key="emp.value"
+              :label="emp.label"
+              :value="emp.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item :label="$t('hr.attendance.department')" prop="department">
-          <el-input v-model="form.department" />
+          <el-select v-model="form.department" filterable clearable :placeholder="$t('hr.attendance.selectDepartment')" style="width: 100%;">
+            <el-option
+              v-for="dept in departmentOptions"
+              :key="dept.value"
+              :label="dept.label"
+              :value="dept.value"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item :label="$t('hr.attendance.date')" prop="date">
           <el-date-picker
@@ -265,11 +282,115 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 考勤补录对话框 -->
+    <el-dialog
+      v-model="showSupplementary"
+      :title="$t('hr.attendance.supplementary')"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
+      width="720px"
+      :close-on-click-modal="false"
+    >
+      <el-alert type="info" :closable="false" style="margin-bottom: 16px;">
+        {{ $t('hr.attendance.supplementaryTip') }}
+      </el-alert>
+      <el-form ref="suppFormRef" :model="suppForm" :rules="suppRules" label-width="130px">
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item :label="$t('hr.attendance.employeeName')" prop="employeeId">
+              <el-select v-model="suppForm.employeeId" filterable clearable :placeholder="$t('hr.attendance.selectEmployee')" style="width: 100%;" @change="handleSuppEmployeeSelect">
+                <el-option
+                  v-for="emp in employeeOptions"
+                  :key="emp.value"
+                  :label="emp.label"
+                  :value="emp.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('hr.attendance.department')" prop="department">
+              <el-select v-model="suppForm.department" filterable clearable :placeholder="$t('hr.attendance.selectDepartment')" style="width: 100%;">
+                <el-option
+                  v-for="dept in departmentOptions"
+                  :key="dept.value"
+                  :label="dept.label"
+                  :value="dept.value"
+                />
+              </el-select>
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item :label="$t('hr.attendance.supplementaryDate')" prop="date">
+          <el-date-picker
+            v-model="suppForm.date"
+            type="date"
+            value-format="YYYY-MM-DD"
+            :placeholder="$t('hr.attendance.selectDate')"
+            style="width: 100%;"
+          />
+        </el-form-item>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item :label="$t('hr.attendance.checkIn')" prop="checkInTime">
+              <el-time-picker
+                v-model="suppForm.checkInTime"
+                format="HH:mm"
+                value-format="HH:mm:ss"
+                :placeholder="$t('hr.attendance.checkInPlaceholder')"
+                style="width: 100%;"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('hr.attendance.checkOut')">
+              <el-time-picker
+                v-model="suppForm.checkOutTime"
+                format="HH:mm"
+                value-format="HH:mm:ss"
+                :placeholder="$t('hr.attendance.checkOutPlaceholder')"
+                style="width: 100%;"
+              />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item :label="$t('hr.attendance.supplementaryType')">
+              <el-select v-model="suppForm.supplementaryType" style="width: 100%;">
+                <el-option :label="$t('hr.attendance.typeNormal')" value="normal" />
+                <el-option :label="$t('hr.attendance.typeLate')" value="late" />
+                <el-option :label="$t('hr.attendance.typeEarlyLeave')" value="early_leave" />
+                <el-option :label="$t('hr.attendance.typeAbsent')" value="absent" />
+                <el-option :label="$t('hr.attendance.typeOvertime')" value="overtime" />
+                <el-option :label="$t('hr.attendance.typeLeave')" value="leave" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item :label="$t('hr.attendance.lateMinutes')">
+              <el-input-number v-model="suppForm.lateMinutes" :min="0" style="width: 100%;" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-form-item :label="$t('hr.attendance.remarks')">
+          <el-input v-model="suppForm.remarks" type="textarea" :rows="2"
+            :placeholder="$t('hr.attendance.supplementaryRemarksPlaceholder')" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showSupplementary = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="handleSupplementary" :loading="savingSupp">
+          {{ $t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -286,8 +407,10 @@ import {
   type AttendanceImportResult,
   type HrAttendance,
 } from '../../api/hr'
+import { getEmployees } from '../../api/employees'
+import { departments } from '../../utils/organization'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -299,11 +422,118 @@ const stats = ref<any>({
 })
 const showDialog = ref(false)
 const showImportDialog = ref(false)
+const showSupplementary = ref(false)
 const editing = ref<HrAttendance | null>(null)
 const formRef = ref<FormInstance>()
+const suppFormRef = ref<FormInstance>()
 const uploadRef = ref()
 const importFile = ref<File | null>(null)
 const previewData = ref<Record<string, any>[]>([])
+const savingSupp = ref(false)
+
+const departments: Record<string, string> = {
+  planning: '企划部', sales: '销售部', tech: '技术部',
+  finance: '财务部', hr: '人事部', domestic: '国内业务部', management: '管理层',
+}
+
+// 员工列表用于下拉选择
+const employeeList = ref<any[]>([])
+
+// 部门下拉选项（使用共享配置）
+const departmentOptions = computed(() => {
+  return departments.map(dept => ({
+    value: dept.value,
+    label: locale.value === 'en-US' ? dept.labelEn : dept.label,
+  }))
+})
+
+// 员工下拉选项
+const employeeOptions = computed(() => {
+  return employeeList.value.map(emp => ({
+    value: emp.id,
+    label: emp.chineseName || emp.englishName || emp.username || emp.nickname,
+  }))
+})
+
+// 加载员工列表
+const loadEmployees = async () => {
+  try {
+    const list = await getEmployees()
+    employeeList.value = list
+  } catch (error) {
+    console.error('加载员工列表失败', error)
+  }
+}
+
+const suppForm = reactive({
+  employeeId: null as number | null,
+  department: '',
+  date: '',
+  checkInTime: '',
+  checkOutTime: '',
+  supplementaryType: 'normal',
+  lateMinutes: 0,
+  remarks: '',
+})
+
+// 选择员工后自动填充部门
+const handleEmployeeSelect = (employeeId: number | null) => {
+  if (employeeId) {
+    const emp = employeeList.value.find(e => e.id === employeeId)
+    if (emp && emp.department) {
+      form.department = emp.department
+    }
+  }
+}
+
+const handleSuppEmployeeSelect = (employeeId: number | null) => {
+  if (employeeId) {
+    const emp = employeeList.value.find(e => e.id === employeeId)
+    if (emp && emp.department) {
+      suppForm.department = emp.department
+    }
+  }
+}
+
+const suppRules: FormRules = {
+  employeeId: [{ required: true, message: t('hr.attendance.employeeNameRequired'), trigger: 'change' }],
+  date: [{ required: true, message: t('hr.attendance.dateRequired'), trigger: 'change' }],
+  checkInTime: [{ required: true, message: t('hr.attendance.checkInRequired'), trigger: 'change' }],
+}
+
+const handleSupplementary = async () => {
+  if (!suppFormRef.value) return
+  try {
+    await suppFormRef.value.validate()
+    savingSupp.value = true
+    const status = suppForm.supplementaryType
+    // 根据选择的员工ID获取员工名称
+    const employeeName = suppForm.employeeId
+      ? (employeeList.value.find(e => e.id === suppForm.employeeId)?.chineseName
+        || employeeList.value.find(e => e.id === suppForm.employeeId)?.englishName
+        || employeeList.value.find(e => e.id === suppForm.employeeId)?.username
+        || '')
+      : ''
+    await createAttendance({
+      employeeName,
+      department: suppForm.department,
+      date: suppForm.date,
+      checkInTime: suppForm.checkInTime || undefined,
+      checkOutTime: suppForm.checkOutTime || undefined,
+      status,
+      lateMinutes: status === 'late' ? suppForm.lateMinutes : 0,
+      earlyLeaveMinutes: status === 'early_leave' ? suppForm.lateMinutes : 0,
+      overtimeMinutes: status === 'overtime' ? suppForm.lateMinutes : 0,
+      remarks: suppForm.remarks || `【补录】${suppForm.remarks || ''}`,
+    })
+    ElMessage.success(t('hr.attendance.supplementarySuccess') || t('common.success'))
+    showSupplementary.value = false
+    Object.assign(suppForm, { employeeId: null, department: '', date: '', checkInTime: '', checkOutTime: '', supplementaryType: 'normal', lateMinutes: 0, remarks: '' })
+    loadData()
+    loadStats()
+  } catch (error: any) { if (error !== false) ElMessage.error(error.message || t('common.error')) }
+  finally { savingSupp.value = false }
+}
 
 const dateRange = ref<string[]>([])
 const filters = reactive({
@@ -318,6 +548,7 @@ const pagination = reactive({
 })
 
 const form = reactive({
+  employeeId: null as number | null,
   employeeName: '',
   department: '',
   date: '',
@@ -331,7 +562,7 @@ const form = reactive({
 })
 
 const rules: FormRules = {
-  employeeName: [{ required: true, message: t('hr.attendance.employeeNameRequired'), trigger: 'blur' }],
+  employeeId: [{ required: true, message: t('hr.attendance.employeeNameRequired'), trigger: 'change' }],
   date: [{ required: true, message: t('hr.attendance.dateRequired'), trigger: 'change' }],
   status: [{ required: true, message: t('hr.attendance.statusRequired'), trigger: 'change' }],
 }
@@ -385,6 +616,7 @@ const resetFilters = () => {
 const handleAdd = () => {
   editing.value = null
   Object.assign(form, {
+    employeeId: null,
     employeeName: '',
     department: '',
     date: '',
@@ -411,10 +643,23 @@ const handleSave = async () => {
     await formRef.value.validate()
     saving.value = true
 
+    // 根据选择的员工ID获取员工名称
+    const employeeName = form.employeeId
+      ? (employeeList.value.find(e => e.id === form.employeeId)?.chineseName
+        || employeeList.value.find(e => e.id === form.employeeId)?.englishName
+        || employeeList.value.find(e => e.id === form.employeeId)?.username
+        || '')
+      : ''
+
+    const saveData = {
+      ...form,
+      employeeName,
+    }
+
     if (editing.value) {
-      await updateAttendance(editing.value.id, { ...form })
+      await updateAttendance(editing.value.id, saveData)
     } else {
-      await createAttendance(form)
+      await createAttendance(saveData)
     }
 
     ElMessage.success(t('common.success'))
@@ -445,6 +690,24 @@ const handleDelete = async (row: HrAttendance) => {
 }
 
 const handleFileChange = (file: any) => {
+  // 文件大小校验（最大 10MB）
+  const maxSize = 10 * 1024 * 1024
+  if (file.size > maxSize) {
+    ElMessage.error('文件大小不能超过 10MB')
+    uploadRef.value?.clearFiles()
+    return
+  }
+
+  // 文件类型校验
+  const allowedTypes = ['.xlsx', '.xls']
+  const fileName = file.name.toLowerCase()
+  const isAllowed = allowedTypes.some(type => fileName.endsWith(type))
+  if (!isAllowed) {
+    ElMessage.error('只支持 .xlsx 或 .xls 格式的 Excel 文件')
+    uploadRef.value?.clearFiles()
+    return
+  }
+
   importFile.value = file.raw
   const reader = new FileReader()
   reader.onload = (e: any) => {
@@ -576,6 +839,7 @@ const getStatusText = (status: string): string => {
 onMounted(() => {
   loadData()
   loadStats()
+  loadEmployees()
 })
 </script>
 

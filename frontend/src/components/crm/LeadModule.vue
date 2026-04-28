@@ -101,22 +101,25 @@
         </el-table-column>
         <el-table-column v-if="isAdmin" prop="assignedTo" :label="$t('crm.leads.assignedTo')" width="120">
           <template #default="{ row }">
-            <span>{{ getOwnerName(row.assignedTo) }}</span>
+            <span>{{ row.assignedToName || getOwnerName(row.assignedTo) }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="inquiryContent" :label="$t('crm.leads.inquiryContent')" min-width="180" show-overflow-tooltip />
         <el-table-column prop="lastFollowUpAt" :label="$t('crm.leads.lastFollowUp')" width="150">
           <template #default="{ row }">{{ formatDate(row.lastFollowUpAt) }}</template>
         </el-table-column>
-        <el-table-column :label="$t('common.operations')" width="220" fixed="right">
+        <el-table-column :label="$t('common.operations')" width="240" fixed="right">
           <template #default="{ row }">
-            <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)">{{ $t('common.edit') }}</el-button>
-            <el-button type="success" size="small" :icon="Check" @click="handleConvert(row)" v-if="row.status !== 'converted' && row.status !== 'lost'">
+            <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)" v-if="canEditLead(row)">{{ $t('common.edit') }}</el-button>
+            <el-button type="success" size="small" :icon="Check" @click="handleConvert(row)" v-if="row.status !== 'converted' && row.status !== 'lost' && canEditLead(row)">
               {{ $t('crm.leads.convertToCustomer') }}
             </el-button>
-            <el-button type="danger" size="small" :icon="Delete" @click="handleDelete(row)">{{ $t('common.delete') }}</el-button>
+            <el-button type="danger" size="small" :icon="Delete" @click="handleDelete(row)" v-if="isAdmin">{{ $t('common.delete') }}</el-button>
           </template>
         </el-table-column>
+        <template #empty>
+          <el-empty :description="$t('common.noData')" :image-size="80" />
+        </template>
       </el-table>
 
       <el-pagination
@@ -159,14 +162,14 @@
           </el-col>
           <el-col :span="12">
             <el-form-item :label="$t('crm.leads.phone')">
-              <el-input v-model="leadForm.phone" placeholder="+1 xxx-xxxx-xxxx" />
+              <el-input v-model="leadForm.phone" :placeholder="locale === 'zh-CN' ? '请输入电话号码' : 'Enter phone number'" />
             </el-form-item>
           </el-col>
         </el-row>
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item :label="$t('crm.leads.email')">
-              <el-input v-model="leadForm.email" placeholder="contact@company.com" />
+              <el-input v-model="leadForm.email" :placeholder="locale === 'zh-CN' ? '请输入邮箱地址' : 'Enter email address'" />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -238,7 +241,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { TrendCharts, Plus, Search, Refresh, Edit, Delete, Check } from '@element-plus/icons-vue'
 import { getCrmLeads, createCrmLead, updateCrmLead, deleteCrmLead, convertCrmLead, getCrmLeadStats,
   type CrmLead, type CrmLeadStat } from '../../api/crm'
-import { getEmployees } from '../../api/employees'
+import { getEmployeeOptions } from '../../api/employees'
 import { CRM_COUNTRIES } from '../../utils/crm-countries'
 import { useUserStore } from '../../store/user'
 
@@ -246,8 +249,18 @@ const { t, locale } = useI18n()
 const userStore = useUserStore()
 
 const isAdmin = computed(() => {
-  return userStore.userInfo?.role === 'super_admin' || userStore.userInfo?.role === 'department_head'
+  // 超级管理员 / 部门负责人 / HR总监 都视为管理员
+  return userStore.userInfo?.isSuperAdmin === true ||
+    userStore.userInfo?.role === 'super_admin' ||
+    userStore.userInfo?.role === 'department_head' ||
+    userStore.userInfo?.role === 'hr_director'
 })
+
+// 判断用户是否可以编辑某条商机（assignedTo 负责人 或 管理员可编辑）
+const canEditLead = (lead: CrmLead): boolean => {
+  if (isAdmin.value) return true
+  return lead.assignedTo === userStore.userInfo?.id || lead.createdBy === userStore.userInfo?.id
+}
 
 const loading = ref(false)
 const saving = ref(false)
@@ -264,25 +277,54 @@ const leadFormRef = ref<FormInstance>()
 const stats = ref<CrmLeadStat>({ total: 0, newLeads: 0, qualified: 0, won: 0 })
 
 const countries = ref<string[]>(CRM_COUNTRIES)
-const salesUsers = ref<{ id: number; username: string; nickname: string }[]>([])
+const salesUsers = ref<{ id: number; nickname: string }[]>([])
 
-const leadSources: Record<string, string> = {
-  official_website: '官网询盘', exhibition: '展会', referral: '朋友推荐',
-  social_media: '社媒询盘', cold_call: '电话开拓', website: '其他网站', partner: '合作伙伴', other: '其他',
-}
+const leadSources = computed<Record<string, string>>(() => ({
+  official_website: t('crm.leads.sources.official_website'),
+  exhibition: t('crm.leads.sources.exhibition'),
+  referral: t('crm.leads.sources.referral'),
+  social_media: t('crm.leads.sources.social_media'),
+  cold_call: t('crm.leads.sources.cold_call'),
+  website: t('crm.leads.sources.website'),
+  partner: t('crm.leads.sources.partner'),
+  other: t('crm.leads.sources.other'),
+}))
 
-const leadStatuses: Record<string, string> = {
-  new: '新建', qualified: '已筛选', contacted: '已联系', proposal: '已报价',
-  negotiating: '谈判中', won: '已成交', lost: '已流失', converted: '已转客户', invalid: '无效线索',
-}
+const leadStatuses = computed<Record<string, string>>(() => ({
+  new: t('crm.leads.statuses.new'),
+  qualified: t('crm.leads.statuses.qualified'),
+  contacted: t('crm.leads.statuses.contacted'),
+  proposal: t('crm.leads.statuses.proposal'),
+  negotiating: t('crm.leads.statuses.negotiating'),
+  won: t('crm.leads.statuses.won'),
+  lost: t('crm.leads.statuses.lost'),
+  converted: t('crm.leads.statuses.converted'),
+  invalid: t('crm.leads.statuses.invalid'),
+}))
 
 const leadStatusesEn: Record<string, string> = {
   new: 'New', qualified: 'Qualified', contacted: 'Contacted', proposal: 'Quoted',
   negotiating: 'Negotiating', won: 'Won', lost: 'Lost', converted: 'Converted', invalid: 'Invalid',
 }
 
-const leadPriorities: Record<string, string> = {
-  low: '低', normal: '普通', high: '高', urgent: '紧急',
+const leadPriorities = computed<Record<string, string>>(() => ({
+  low: t('crm.leads.priorities.low'),
+  normal: t('crm.leads.priorities.normal'),
+  high: t('crm.leads.priorities.high'),
+  urgent: t('crm.leads.priorities.urgent'),
+}))
+
+// 状态标签类型映射（解决空字符串问题）
+const leadStatusTagTypeMap: Record<string, string> = {
+  new: 'info',
+  qualified: 'success',
+  contacted: 'primary',
+  proposal: 'warning',
+  negotiating: 'warning',
+  won: 'success',
+  lost: 'danger',
+  converted: 'success',
+  invalid: 'info',
 }
 
 const leadForm = ref({
@@ -327,29 +369,28 @@ const loadLeads = async () => {
   finally { loading.value = false }
 }
 
-const getSourceLabel = (source: string) => leadSources[source] || source
-const getPriorityLabel = (p: string) => leadPriorities[p] || p
+const getSourceLabel = (source: string) => leadSources.value[source] || source
+const getPriorityLabel = (p: string) => leadPriorities.value[p] || p
 const getPriorityType = (p: string): string => ({ low: 'info', normal: '', high: 'warning', urgent: 'danger' }[p] || 'info')
 const getStatusLabel = (s: string) => {
   if (locale.value === 'en-US') return leadStatusesEn[s] || s
-  return leadStatuses[s] || s
+  return leadStatuses.value[s] || s
 }
 const getStatusTagType = (s: string): string => {
-  return { new: 'info', qualified: '', contacted: 'primary', proposal: 'warning', negotiating: 'warning', won: 'success', lost: 'danger', converted: 'success', invalid: 'info' }[s] || 'info'
+  return leadStatusTagTypeMap[s] || 'info'
 }
 const formatDate = (d: string | null | undefined) => d ? new Date(d).toLocaleString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US') : '-'
 
 const getOwnerName = (ownerId: number | null | undefined): string => {
   if (!ownerId) return '-'
-  const user = salesUsers.value.find(u => u.id === ownerId)
-  return user?.nickname || user?.username || String(ownerId)
+  return String(ownerId)
 }
 
 const loadSalesUsers = async () => {
   try {
-    const employees = await getEmployees()
+    const employees = await getEmployeeOptions()
     salesUsers.value = employees.map((e: any) => ({
-      id: e.id, username: e.username, nickname: e.nickname,
+      id: e.id, nickname: e.nickname,
     }))
   } catch {}
 }
@@ -408,7 +449,28 @@ const handleConvert = async (lead: CrmLead) => {
       t('crm.leads.convertToCustomer'), { type: 'info', confirmButtonText: t('common.confirm') }
     )
     const customer = await convertCrmLead(lead.id)
-    ElMessage.success(t('crm.leads.convertSuccess', { code: customer.customerCode }))
+    const customerCode = customer.customerCode || 'N/A'
+    ElMessage.success(t('crm.leads.convertSuccess', { code: customerCode }))
+
+    // 引导下一步：询问是否立即创建报价单
+    const createQuotation = await ElMessageBox.confirm(
+      t('crm.leads.createQuotationPrompt', { code: customerCode }),
+      t('crm.leads.nextStep'),
+      { confirmButtonText: t('crm.leads.createQuotationNow') || '立即创建报价单', cancelButtonText: t('common.no') || '暂不需要', type: 'success' }
+    ).then(() => true).catch(() => false)
+
+    if (createQuotation) {
+      // 预填报价单数据（使用 localStorage 跨路由传递）
+      localStorage.setItem('pending_quotation_from_lead', JSON.stringify({
+        customerId: customer.id,
+        customerName: customer.customerName,
+        estimatedRevenue: customer.estimatedRevenue,
+        source: customer.inquirySource,
+      }))
+      // 跳转到 Sales 视图报价单标签
+      window.location.href = '/sales?tab=quotations'
+    }
+
     await loadLeads()
     await loadStats()
   } catch (error: any) { if (error !== 'cancel') ElMessage.error(error.message || t('common.error')) }

@@ -17,7 +17,7 @@ export class Reminder {
   @Column({ type: 'text', nullable: true })
   memo: string; // 备忘录
 
-  @Column({ type: 'datetime' })
+  @Column({ type: 'timestamp' })
   reminderTime: Date; // 提醒时间
 
   @Column({ default: false })

@@ -3,6 +3,7 @@ export default {
   appName: 'Enbon 后台管理系统',
   // 菜单
   menu: {
+    index: '首页',
     home: '首页',
     workspace: '工作空间',
     workGroup: '工作群组',

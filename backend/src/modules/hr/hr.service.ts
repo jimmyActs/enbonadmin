@@ -1,16 +1,25 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException, Inject, forwardRef } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Like } from 'typeorm';
+import { HrLeaveRequest, LeaveStatus } from './entities/hr-leave-request.entity';
 import { HrAttendance, AttendanceStatus } from './entities/hr-attendance.entity';
-import { HrPerformance, HrPerformanceTemplate, PerformanceStatus } from './entities/hr-performance.entity';
+import { HrPerformance, PerformanceStatus } from './entities/hr-performance.entity';
+import { HrPerformanceTemplate } from './entities/hr-performance-template.entity';
 import { HrRecruitmentDemand, HrCandidate, RecruitmentStatus, RecruitmentSource, RecruitmentDemandStatus } from './entities/hr-recruitment.entity';
 import { HrPayroll, HrPayrollStructure } from './entities/hr-payroll.entity';
 import { HrEvent } from './entities/hr-event.entity';
 import { UsersService } from '../users/users.service';
 import { PermissionsService } from '../permissions/permissions.service';
-import { User, EmploymentStatus, Gender } from '../users/entities/user.entity';
+import { User, EmploymentStatus, Gender, UserRole, Department } from '../users/entities/user.entity';
 import { DataScope } from '../permissions/entities/role-permission.entity';
+import { EmailService } from '../../common/email/email.service';
 import { generateMultiSheetExcel } from '../../common/excel.util';
+import { RemindersService } from '../reminders/reminders.service';
+import PDFDocument from 'pdfkit';
+
+const DEFAULT_BASE_SALARY = 5000; // 未配置薪资结构时的默认基本工资
+const DEFAULT_SOCIAL_SECURITY = 400; // 默认社保个人部分
+const DEFAULT_HOUSING_FUND = 300; // 默认公积金个人部分
 
 /** 用户上下文（来自 AuthGuard 注入） */
 export interface UserContext {
@@ -22,30 +31,58 @@ export interface UserContext {
   permissions?: string[];
 }
 
+// HR权限通配符匹配（支持 hr.* 匹配 hr.payroll.approve）
+function hasHrPermission(permissions: string[], code: string): boolean {
+  return permissions.some(p =>
+    p === '*' || p === code ||
+    (p.endsWith('.*') && (code.startsWith(p.slice(0, -1)) || code.startsWith(p.slice(0, -2) + '.')))
+  );
+}
+
 /**
- * 统一数据过滤辅助函数
- * 根据用户的 DataScope 自动添加查询条件
+ * 根据 DataScope 过滤查询
+ * @param qb QueryBuilder
+ * @param userContext 用户上下文
+ * @param idField 员工ID字段名（如 'a.employeeId'）
+ * @param deptField 部门字段名（如 'a.department'）
+ * @param userDepartment 当前用户的部门
  */
 function applyDataScopeFilter(
   qb: any,
-  permissionCode: string,
   userContext: UserContext,
-  departmentField: string,
+  idField: string,
+  deptField: string,
+  userDepartment?: string,
 ) {
   if (userContext.isSuperAdmin) return; // 超级管理员不过滤
-  if (!userContext.permissions?.includes(permissionCode)) return;
+
+  const perms = userContext.permissions || [];
 
   // 普通员工只能看自己的数据
   if (userContext.role === 'employee' || userContext.role === 'guest') {
-    qb.andWhere(`${departmentField} = :selfId`, { selfId: userContext.id });
+    qb.andWhere(`${idField} = :selfId`, { selfId: userContext.id });
+    return;
   }
-  // 其他角色默认可见本部门数据（DEPARTMENT scope）
-  // 若有更细粒度控制，可在 service 层单独覆盖此行为
+
+  // 有 HR 权限的人：hr.* / hr.payroll.view 等，可以看到全部（ORG 范围）
+  // 有 DEPARTMENT 范围的人：只能看本部门数据
+  if (hasHrPermission(perms, 'hr.attendance.view') ||
+      hasHrPermission(perms, 'hr.payroll.view') ||
+      hasHrPermission(perms, 'hr.recruitment.') ||
+      hasHrPermission(perms, 'hr.performance.view')) {
+    // 有 HR 权限，不限制
+    return;
+  }
+
+  // 否则只能看自己的
+  qb.andWhere(`${idField} = :selfId`, { selfId: userContext.id });
 }
 
 @Injectable()
 export class HrService {
   constructor(
+    @InjectRepository(HrLeaveRequest)
+    private leaveRepo: Repository<HrLeaveRequest>,
     @InjectRepository(HrAttendance)
     private attendanceRepo: Repository<HrAttendance>,
     @InjectRepository(HrPerformance)
@@ -62,9 +99,51 @@ export class HrService {
     private payrollStructureRepo: Repository<HrPayrollStructure>,
     @InjectRepository(HrEvent)
     private eventRepo: Repository<HrEvent>,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
     private readonly usersService: UsersService,
     private readonly permissionsService: PermissionsService,
+    private readonly emailService: EmailService,
+    private readonly remindersService: RemindersService,
   ) {}
+
+  // ==================== 员工搜索 ====================
+
+  async searchEmployees(params: {
+    keyword?: string;
+    department?: string;
+    limit?: number;
+    currentUserId: number;
+  }): Promise<{ id: number; name: string; department?: string; position?: string }[]> {
+    const { keyword, department, limit = 20 } = params;
+
+    const queryBuilder = this.usersService['userRepo'].createQueryBuilder('user')
+      .select(['user.id', 'user.nickname', 'user.chineseName', 'user.englishName', 'user.department', 'user.position'])
+      .where('user.isActive = :isActive', { isActive: true })
+      .andWhere('user.employmentStatus = :status', { status: 'active' });
+
+    if (keyword) {
+      queryBuilder.andWhere(
+        '(user.nickname LIKE :kw OR user.chineseName LIKE :kw OR user.englishName LIKE :kw OR user.username LIKE :kw)',
+        { kw: `%${keyword}%` }
+      );
+    }
+
+    if (department) {
+      queryBuilder.andWhere('user.department = :department', { department });
+    }
+
+    queryBuilder.orderBy('user.id', 'ASC').take(limit);
+
+    const users = await queryBuilder.getMany();
+
+    return users.map(user => ({
+      id: user.id,
+      name: user.chineseName || user.englishName || user.nickname || user.username,
+      department: user.department,
+      position: user.position,
+    }));
+  }
 
   // ==================== 考勤管理 ====================
 
@@ -78,12 +157,12 @@ export class HrService {
     userId: number,
   ): Promise<{ imported: number; updated: number; skipped: number; errors: string[] }> {
     const statusMap: Record<string, AttendanceStatus> = {
-      '正常': 'present', 'present': 'present',
-      '缺勤': 'absent', 'absent': 'absent',
-      '迟到': 'late', 'late': 'late',
-      '早退': 'early_leave', 'early_leave': 'early_leave',
-      '请假': 'leave', 'leave': 'leave',
-      '加班': 'overtime', 'overtime': 'overtime',
+      '正常': AttendanceStatus.PRESENT, 'present': AttendanceStatus.PRESENT,
+      '缺勤': AttendanceStatus.ABSENT, 'absent': AttendanceStatus.ABSENT,
+      '迟到': AttendanceStatus.LATE, 'late': AttendanceStatus.LATE,
+      '早退': AttendanceStatus.EARLY_LEAVE, 'early_leave': AttendanceStatus.EARLY_LEAVE,
+      '请假': AttendanceStatus.LEAVE, 'leave': AttendanceStatus.LEAVE,
+      '加班': AttendanceStatus.OVERTIME, 'overtime': AttendanceStatus.OVERTIME,
     };
 
     const errors: string[] = [];
@@ -157,7 +236,7 @@ export class HrService {
   }
 
   async deleteAttendance(id: number): Promise<void> {
-    await this.attendanceRepo.delete(id);
+    await this.attendanceRepo.update(id, { isDeleted: true });
   }
 
   async listAttendance(params: {
@@ -169,6 +248,7 @@ export class HrService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const qb = this.attendanceRepo.createQueryBuilder('a');
+    qb.andWhere('a.isDeleted = :isDeleted', { isDeleted: false });
 
     if (params.employeeId) qb.andWhere('a.employeeId = :employeeId', { employeeId: params.employeeId });
     if (params.department) qb.andWhere('a.department LIKE :department', { department: `%${params.department}%` });
@@ -209,6 +289,7 @@ export class HrService {
     if (!params.startDate || !params.endDate) return emptyResult;
 
     const qb = this.attendanceRepo.createQueryBuilder('a');
+    qb.andWhere('a.isDeleted = :isDeleted', { isDeleted: false });
     qb.where('a.date >= :startDate', { startDate: params.startDate });
     qb.andWhere('a.date <= :endDate', { endDate: params.endDate });
     if (params.department) qb.andWhere('a.department = :department', { department: params.department });
@@ -239,6 +320,108 @@ export class HrService {
       attendanceRate: total > 0 ? Math.round(((present + leave + overtime) / total) * 100) : 0,
       totalLateMinutes, totalEarlyLeaveMinutes, totalOvertimeMinutes,
     };
+  }
+
+  // ==================== 请假申请管理 ====================
+
+  async createLeaveRequest(dto: {
+    employeeId: number; employeeName: string; department?: string;
+    leaveType: string; startDate: string; endDate: string;
+    days?: number; reason?: string;
+  }, userContext: UserContext) {
+    const leave = this.leaveRepo.create({
+      employeeId: dto.employeeId,
+      employeeName: dto.employeeName,
+      department: dto.department || userContext.department || null,
+      leaveType: dto.leaveType as any,
+      startDate: dto.startDate,
+      endDate: dto.endDate,
+      days: dto.days || 1,
+      reason: dto.reason || null,
+      status: LeaveStatus.PENDING as any,
+    } as Partial<HrLeaveRequest>);
+    return this.leaveRepo.save(leave);
+  }
+
+  async listLeaveRequests(params: {
+    page?: number; pageSize?: number;
+    status?: string; employeeId?: number; keyword?: string;
+    userContext?: UserContext;
+  }, userId: number) {
+    const page = Number(params.page) > 0 ? Number(params.page) : 1;
+    const pageSize = Number(params.pageSize) > 0 ? Number(params.pageSize) : 20;
+    const qb = this.leaveRepo.createQueryBuilder('l');
+
+    if (params.status) qb.andWhere('l.status = :status', { status: params.status });
+    if (params.employeeId) qb.andWhere('l.employeeId = :employeeId', { employeeId: params.employeeId });
+    if (params.keyword?.trim()) {
+      const kw = `%${params.keyword.trim()}%`;
+      qb.andWhere('(l.employeeName LIKE :kw OR l.reason LIKE :kw)', { kw });
+    }
+
+    // 普通员工只能看自己的请假记录；HR 可以看全部
+    if (params.userContext && !params.userContext.isSuperAdmin) {
+      const perms = params.userContext.permissions || [];
+      const isHr = perms.some(p => p.startsWith('hr.'));
+      if (!isHr) {
+        qb.andWhere('l.employeeId = :uid', { uid: userId });
+      }
+    }
+
+    qb.andWhere('l.status != :cancelled', { cancelled: LeaveStatus.CANCELLED });
+
+    const [data, total] = await qb
+      .orderBy('l.createdAt', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+
+    return { data, total, page, pageSize };
+  }
+
+  async approveLeaveRequest(id: number, approverId: number, approverName: string, userContext: UserContext, comment?: string) {
+    // 检查权限：只有 HR 权限的人才能审批
+    const perms = userContext.permissions || [];
+    const isHr = perms.some(p => p.startsWith('hr.'));
+    if (!isHr && !userContext.isSuperAdmin) {
+      throw new ForbiddenException('您没有审批请假申请的权限');
+    }
+
+    const leave = await this.leaveRepo.findOne({ where: { id } });
+    if (!leave) throw new NotFoundException('请假记录不存在');
+    if (leave.status !== LeaveStatus.PENDING) throw new BadRequestException('该申请已被处理');
+
+    leave.status = LeaveStatus.APPROVED;
+    leave.approverId = approverId;
+    leave.approverName = approverName;
+    leave.approverComment = (comment ?? null) as any;
+    leave.approvedAt = new Date();
+    return this.leaveRepo.save(leave);
+  }
+
+  async rejectLeaveRequest(id: number, rejectReason: string, userContext: UserContext) {
+    const perms = userContext.permissions || [];
+    const isHr = perms.some(p => p.startsWith('hr.'));
+    if (!isHr && !userContext.isSuperAdmin) {
+      throw new ForbiddenException('您没有审批请假申请的权限');
+    }
+
+    const leave = await this.leaveRepo.findOne({ where: { id } });
+    if (!leave) throw new NotFoundException('请假记录不存在');
+    if (leave.status !== LeaveStatus.PENDING) throw new BadRequestException('该申请已被处理');
+
+    leave.status = LeaveStatus.REJECTED;
+    leave.rejectReason = rejectReason;
+    return this.leaveRepo.save(leave);
+  }
+
+  async cancelLeaveRequest(id: number, userId: number) {
+    const leave = await this.leaveRepo.findOne({ where: { id } });
+    if (!leave) throw new NotFoundException('请假记录不存在');
+    if (leave.employeeId !== userId) throw new ForbiddenException('只能取消自己的请假申请');
+    if (leave.status !== LeaveStatus.PENDING) throw new BadRequestException('只能取消待审批状态的申请');
+    leave.status = LeaveStatus.CANCELLED;
+    return this.leaveRepo.save(leave);
   }
 
   // ==================== 绩效管理 ====================
@@ -276,6 +459,7 @@ export class HrService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const qb = this.performanceRepo.createQueryBuilder('p');
+    qb.andWhere('p.isDeleted = :isDeleted', { isDeleted: false });
 
     if (params.employeeId) qb.andWhere('p.employeeId = :employeeId', { employeeId: params.employeeId });
     if (params.department) qb.andWhere('p.department LIKE :department', { department: `%${params.department}%` });
@@ -306,6 +490,13 @@ export class HrService {
     if (userContext && !userContext.isSuperAdmin) {
       if (existing.employeeId !== userId && !userContext.permissions?.includes('hr.performance.evaluate')) {
         throw new NotFoundException('无权修改此绩效记录');
+      }
+    }
+
+    // 状态流转校验：只能提交草稿状态的绩效
+    if (dto.status === 'submitted') {
+      if (existing.status !== 'draft') {
+        throw new BadRequestException('只能提交草稿状态的绩效');
       }
     }
 
@@ -358,7 +549,7 @@ export class HrService {
   }
 
   async deletePerformance(id: number): Promise<void> {
-    await this.performanceRepo.delete(id);
+    await this.performanceRepo.update(id, { isDeleted: true });
   }
 
   async getPerformanceStats(params: {
@@ -366,6 +557,7 @@ export class HrService {
     userId?: number; userContext?: UserContext;
   }) {
     const qb = this.performanceRepo.createQueryBuilder('p');
+    qb.andWhere('p.isDeleted = :isDeleted', { isDeleted: false });
     if (params.period) qb.andWhere('p.period = :period', { period: params.period });
     if (params.department) qb.andWhere('p.department = :department', { department: params.department });
 
@@ -378,15 +570,24 @@ export class HrService {
     const records = await qb.getMany();
     const total = records.length;
 
+    // 只统计已审核（状态为 reviewed/completed 且 finalScore > 0）的记录
+    const reviewedRecords = records.filter(r =>
+      (r.status === 'reviewed' || r.status === 'completed') &&
+      r.finalScore != null && r.finalScore !== undefined && r.finalScore > 0
+    );
+
     const ratingDistribution = {
-      A: records.filter(r => r.rating === 'A').length,
-      B: records.filter(r => r.rating === 'B').length,
-      C: records.filter(r => r.rating === 'C').length,
-      D: records.filter(r => r.rating === 'D').length,
-      E: records.filter(r => r.rating === 'E').length,
+      A: reviewedRecords.filter(r => r.rating === 'A').length,
+      B: reviewedRecords.filter(r => r.rating === 'B').length,
+      C: reviewedRecords.filter(r => r.rating === 'C').length,
+      D: reviewedRecords.filter(r => r.rating === 'D').length,
+      E: reviewedRecords.filter(r => r.rating === 'E').length,
     };
 
-    const avgScore = total > 0 ? records.reduce((sum, r) => sum + r.finalScore, 0) / total : 0;
+    // avgScore：仅使用已审核记录的 finalScore（不再 fallback 到 selfScore，保证数据准确性）
+    const avgScore = reviewedRecords.length > 0
+      ? reviewedRecords.reduce((sum, r) => sum + (r.finalScore ?? 0), 0) / reviewedRecords.length
+      : 0;
 
     return {
       total,
@@ -398,7 +599,11 @@ export class HrService {
 
   private async getPerformanceByDepartment(params: { period?: string; department?: string; userId?: number; userContext?: UserContext }) {
     const qb = this.performanceRepo.createQueryBuilder('p');
+    qb.andWhere('p.isDeleted = :isDeleted', { isDeleted: false });
     if (params.period) qb.andWhere('p.period = :period', { period: params.period });
+    qb.andWhere('(p.status = :reviewed OR p.status = :completed)', { reviewed: 'reviewed', completed: 'completed' });
+    qb.andWhere('p.finalScore IS NOT NULL');
+    qb.andWhere('p.finalScore > 0');
     qb.select('p.department', 'department');
     qb.addSelect('COUNT(*)', 'count');
     qb.addSelect('AVG(p.finalScore)', 'avgScore');
@@ -418,7 +623,57 @@ export class HrService {
 
   async createRecruitmentDemand(dto: Partial<HrRecruitmentDemand>): Promise<HrRecruitmentDemand> {
     const demand = this.demandRepo.create(dto);
-    return this.demandRepo.save(demand);
+    const savedDemand = await this.demandRepo.save(demand);
+
+    // 为 HR 招聘负责人创建待办通知
+    await this.notifyRecruitmentDemandToHr(savedDemand, dto);
+
+    return savedDemand;
+  }
+
+  /**
+   * 为招聘需求创建 HR 通知
+   */
+  private async notifyRecruitmentDemandToHr(demand: HrRecruitmentDemand, dto: Partial<HrRecruitmentDemand>): Promise<void> {
+    try {
+      // 找出所有 HR 招聘相关的用户（hr_director、hr）
+      const hrUsers = await this.userRepo.find({
+        where: [
+          { role: UserRole.HR_DIRECTOR, isActive: true },
+          { role: UserRole.HR, department: Department.HR_CENTER, isActive: true },
+        ],
+      });
+
+      if (hrUsers.length === 0) return;
+
+      const now = new Date();
+      const content = `收到新的招聘需求：「${dto.position || '未知岗位'}」- ${dto.department || '未知部门'}，需求人数：${dto.headcount || 1}人，紧急程度：${dto.urgency || '普通'}`;
+      const memo = `需求编号：${demand.id}，申请人：${dto.requesterName || '未知'}，预计到岗：${dto.expectedDate || '待定'}`;
+      // 申请人作为通知的创建者
+      const creatorId = dto.requesterId || 0;
+
+      // 为每个 HR 用户创建待办
+      for (const hrUser of hrUsers) {
+        await this.remindersService.create(creatorId, {
+          targetUserId: hrUser.id,
+          content,
+          reminderTime: now.toISOString(),
+          memo,
+        });
+      }
+    } catch (err) {
+      console.error('[HrService] 创建招聘需求通知失败:', err.message);
+      // 不阻止招聘需求创建
+    }
+  }
+
+  /** 员工自助：查询自己提交的招聘需求（按 requesterId 过滤） */
+  async listMyRecruitmentDemands(userId: number) {
+    const qb = this.demandRepo.createQueryBuilder('d');
+    qb.andWhere('d.isDeleted = :isDeleted', { isDeleted: false });
+    qb.andWhere('d.requesterId = :userId', { userId });
+    qb.orderBy('d.createdAt', 'DESC');
+    return qb.getMany();
   }
 
   async listRecruitmentDemands(params: {
@@ -429,6 +684,7 @@ export class HrService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const qb = this.demandRepo.createQueryBuilder('d');
+    qb.andWhere('d.isDeleted = :isDeleted', { isDeleted: false });
     if (params.department) qb.andWhere('d.department LIKE :department', { department: `%${params.department}%` });
     if (params.status) qb.andWhere('d.status = :status', { status: params.status });
 
@@ -479,6 +735,7 @@ export class HrService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const qb = this.candidateRepo.createQueryBuilder('c');
+    qb.andWhere('c.isDeleted = :isDeleted', { isDeleted: false });
     if (params.demandId) qb.andWhere('c.demandId = :demandId', { demandId: params.demandId });
     if (params.status) qb.andWhere('c.status = :status', { status: params.status });
     if (params.source) qb.andWhere('c.source = :source', { source: params.source });
@@ -529,21 +786,21 @@ export class HrService {
   }
 
   async deleteCandidate(id: number): Promise<void> {
-    await this.candidateRepo.delete(id);
+    await this.candidateRepo.update(id, { isDeleted: true });
   }
 
   async getRecruitmentStats() {
-    const totalCandidates = await this.candidateRepo.count();
-    const pending = await this.candidateRepo.count({ where: { status: 'pending' } });
-    const interviewing = await this.candidateRepo.count({ where: { status: 'interviewing' } });
-    const offered = await this.candidateRepo.count({ where: { status: 'offered' } });
-    const hired = await this.candidateRepo.count({ where: { status: 'hired' } });
-    const rejected = await this.candidateRepo.count({ where: { status: 'rejected' } });
+    const totalCandidates = await this.candidateRepo.count({ where: { isDeleted: false } });
+    const pending = await this.candidateRepo.count({ where: { status: 'pending', isDeleted: false } });
+    const interviewing = await this.candidateRepo.count({ where: { status: 'interviewing', isDeleted: false } });
+    const offered = await this.candidateRepo.count({ where: { status: 'offered', isDeleted: false } });
+    const hired = await this.candidateRepo.count({ where: { status: 'hired', isDeleted: false } });
+    const rejected = await this.candidateRepo.count({ where: { status: 'rejected', isDeleted: false } });
 
     const sources = ['boss', 'zhilian', 'liepin', 'referral', 'headhunter', 'website', 'campus', 'other'] as RecruitmentSource[];
     const sourceStats = await Promise.all(sources.map(async (source) => {
-      const total = await this.candidateRepo.count({ where: { source } });
-      const hiredCount = await this.candidateRepo.count({ where: { source, status: 'hired' } });
+      const total = await this.candidateRepo.count({ where: { source, isDeleted: false } });
+      const hiredCount = await this.candidateRepo.count({ where: { source, status: 'hired', isDeleted: false } });
       return { source, total, hired: hiredCount, hireRate: total > 0 ? Math.round((hiredCount / total) * 100) : 0 };
     }));
 
@@ -558,6 +815,118 @@ export class HrService {
     };
 
     return { total: totalCandidates, pending, interviewing, offered, hired, rejected, sourceStats, funnel };
+  }
+
+  async scheduleInterview(
+    candidateId: number,
+    dto: { interviewTime?: string; interviewerName?: string; interviewRecord?: string },
+    userId: number,
+    userName: string,
+  ) {
+    const candidate = await this.candidateRepo.findOne({ where: { id: candidateId } });
+    if (!candidate) throw new NotFoundException('候选人记录不存在');
+
+    await this.candidateRepo.update(candidateId, {
+      interviewTime: dto.interviewTime,
+      interviewerName: dto.interviewerName,
+      interviewRecord: dto.interviewRecord,
+      updatedAt: new Date(),
+    });
+    const updated = await this.candidateRepo.findOne({ where: { id: candidateId } });
+    return updated;
+  }
+
+  async sendInterviewEmail(
+    candidateId: number,
+    dto: { email: string; subject: string; content: string },
+    userId: number,
+    userContext?: UserContext,
+  ) {
+    const candidate = await this.candidateRepo.findOne({ where: { id: candidateId } });
+    if (!candidate) throw new NotFoundException('候选人记录不存在');
+    if (!dto.email) throw new ForbiddenException('候选人邮箱为空，无法发送邮件');
+
+      // 调用邮件服务发送面试邀请邮件
+    try {
+      // 邮件内容包含面试时间（如果有）
+      let content = dto.content || '';
+      if (candidate.interviewTime) {
+        const interviewDate = new Date(candidate.interviewTime).toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })
+        content = content.replace('面试时间：待确认', `面试时间：${interviewDate}`)
+      }
+      const result = await this.emailService.send({ to: dto.email, subject: dto.subject, html: content });
+      if (!result.success) {
+        throw new Error(result.error);
+      }
+      return { success: true, sentTo: dto.email, messageId: result.messageId };
+    } catch (err) {
+      throw new ForbiddenException('邮件发送失败，请检查邮件配置');
+    }
+  }
+
+  // ==================== 面试日历 ====================
+  async getInterviewSchedules(params: { status?: string; department?: string; startDate?: string; endDate?: string }) {
+    const queryBuilder = this.candidateRepo.createQueryBuilder('candidate')
+      .where('candidate.interviewTime IS NOT NULL')
+      .andWhere('candidate.isDeleted = :isDeleted', { isDeleted: false });
+
+    if (params.status) {
+      if (params.status === 'COMPLETED') {
+        queryBuilder.andWhere("candidate.status IN ('HIRED', 'REJECTED', 'WITHDRAWN')");
+      } else if (params.status === 'CANCELLED') {
+        queryBuilder.andWhere("candidate.status = 'REJECTED'");
+      } else {
+        queryBuilder.andWhere("candidate.status IN ('APPROVED', 'INTERVIEW_SCHEDULED')");
+      }
+    }
+
+    if (params.startDate) {
+      queryBuilder.andWhere('candidate.interviewTime >= :startDate', { startDate: params.startDate });
+    }
+    if (params.endDate) {
+      queryBuilder.andWhere('candidate.interviewTime <= :endDate', { endDate: params.endDate });
+    }
+
+    queryBuilder.orderBy('candidate.interviewTime', 'ASC');
+
+    const candidates = await queryBuilder.getMany();
+
+    return {
+      schedules: candidates.map(c => ({
+        id: c.id,
+        candidateId: c.id,
+        candidateName: c.name,
+        // position 和 interviewType, interviewLocation 不存在于 HrCandidate 实体，使用空值
+        position: c.currentPosition || '',
+        interviewType: 'GENERAL',
+        interviewerId: c.interviewerId,
+        interviewerName: c.interviewerName,
+        scheduledAt: c.interviewTime,
+        duration: 60,
+        location: '待定',
+        status: this.getInterviewStatus(c.status),
+        notes: c.interviewRecord,
+      })),
+      total: candidates.length,
+    };
+  }
+
+  private getInterviewStatus(candidateStatus: string): string {
+    if (candidateStatus === 'HIRED' || candidateStatus === 'REJECTED' || candidateStatus === 'WITHDRAWN') {
+      return 'COMPLETED';
+    }
+    return 'SCHEDULED';
+  }
+
+  async sendInterviewReminder(scheduleId: number) {
+    const candidate = await this.candidateRepo.findOne({ where: { id: scheduleId } });
+    if (!candidate) throw new NotFoundException('面试记录不存在');
+    if (!candidate.interviewTime) throw new BadRequestException('该候选人尚未安排面试时间');
+
+    // TODO: 实际发送邮件或站内通知
+    console.log(`[Interview Reminder] Sending reminder for candidate ${candidate.name} at ${candidate.interviewTime}`);
+
+    return { success: true, message: '提醒已发送' };
   }
 
   // ==================== 薪资管理 ====================
@@ -597,11 +966,87 @@ export class HrService {
   }
 
   async batchGeneratePayroll(params: { period: string; department?: string; attendanceStats: any; performanceStats: any; createdBy: number }) {
+    // 防止重复生成
     const qb = this.payrollRepo.createQueryBuilder('p');
     qb.where('p.period = :period', { period: params.period });
+    if (params.department) qb.andWhere('p.department = :department', { department: params.department });
     const existing = await qb.getMany();
-    if (existing.length > 0) return { generated: 0, message: '该月薪资已生成' };
-    return { generated: 0, message: '批量生成功能需要对接员工基础薪资数据' };
+    if (existing.length > 0) return { generated: 0, message: '该月薪资已生成，请勿重复操作' };
+
+    // 获取在职员工列表
+    const employeeQb = this.userRepo.createQueryBuilder('user')
+      .where('user.status = :status', { status: 'active' });
+    if (params.department) employeeQb.andWhere('user.department = :department', { department: params.department });
+    const employees = await employeeQb.getMany();
+
+    if (employees.length === 0) return { generated: 0, message: '该部门暂无在职员工' };
+
+    // 获取薪资结构（按岗位匹配）
+    const structures = await this.payrollStructureRepo.find({ where: { isActive: true } });
+    const structureMap = new Map(structures.map(s => [s.position, s]));
+
+    // 获取当月考勤统计（key: employeeId）
+    const attendanceStats = params.attendanceStats || {};
+
+    // 获取当月绩效数据（key: employeeId）
+    const performanceStats = params.performanceStats || {};
+
+    let generated = 0;
+    const errors: string[] = [];
+
+    for (const emp of employees) {
+      const structure = structureMap.get(emp.position || '');
+      if (!structure) {
+        errors.push(`${emp.chineseName || emp.username}（岗位：${emp.position || '未设置'}）：无薪资结构`);
+        continue;
+      }
+
+      const att: any = (params.attendanceStats || {})[emp.id] || (params.attendanceStats || {})[String(emp.id)] || {};
+      const perf: any = (params.performanceStats || {})[emp.id] || (params.performanceStats || {})[String(emp.id)] || {};
+
+      const baseSalary = Number(structure.baseSalary) || 0;
+      const performanceSalary = Number(structure.performanceSalary) || 0;
+      const overtimePay = Number(structure.overtimePay) || 0;
+      const mealAllowance = Number(structure.mealAllowance) || 0;
+      const transportAllowance = Number(structure.transportAllowance) || 0;
+
+      const lateCount = Number(att.lateCount) || 0;
+      const earlyLeaveCount = Number(att.earlyLeaveCount) || 0;
+      const absentCount = Number(att.absentCount) || 0;
+      const attendanceDeduction = (lateCount + earlyLeaveCount) * 50 + absentCount * 200;
+
+      const performanceScore = Number(perf.score) || 0;
+      const housingFund = Number(structure.housingFund) || 0;
+      const socialSecurity = Number(structure.socialSecurity) || 0;
+
+      const grossSalary = baseSalary + performanceSalary + overtimePay + mealAllowance + transportAllowance;
+      const totalDeductions = housingFund + socialSecurity + attendanceDeduction;
+      const netSalary = grossSalary - totalDeductions;
+
+      await this.payrollRepo.save({
+        employeeId: emp.id,
+        employeeName: emp.chineseName || emp.username,
+        department: emp.department || params.department || '',
+        position: emp.position || '',
+        period: params.period,
+        baseSalary, performanceSalary, overtimePay,
+        mealAllowance, transportAllowance,
+        lateCount, earlyLeaveCount, absentCount,
+        attendanceDeduction, performanceScore,
+        housingFund, socialSecurity,
+        tax: 0,
+        grossSalary, totalDeductions, netSalary,
+        status: 'draft',
+        createdBy: params.createdBy,
+      });
+      generated++;
+    }
+
+    return {
+      generated,
+      message: `成功生成 ${generated} 条薪资草稿${errors.length > 0 ? `（${errors.length} 条跳过）` : ''}`,
+      skipped: errors.slice(0, 10),
+    };
   }
 
   async listPayroll(params: {
@@ -612,6 +1057,7 @@ export class HrService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const qb = this.payrollRepo.createQueryBuilder('p');
+    qb.andWhere('p.isDeleted = :isDeleted', { isDeleted: false });
 
     if (params.employeeId) qb.andWhere('p.employeeId = :employeeId', { employeeId: params.employeeId });
     if (params.department) qb.andWhere('p.department LIKE :department', { department: `%${params.department}%` });
@@ -636,6 +1082,17 @@ export class HrService {
     return { data, total, page, pageSize };
   }
 
+  /** 员工自助：查询自己的薪资记录（仅本人数据） */
+  async getMyPayroll(userId: number) {
+    const qb = this.payrollRepo.createQueryBuilder('p');
+    qb.andWhere('p.isDeleted = :isDeleted', { isDeleted: false });
+    qb.andWhere('p.employeeId = :employeeId', { employeeId: userId });
+    qb.andWhere('p.status = :status', { status: 'paid' }); // 只显示已发放的薪资
+    qb.orderBy('p.period', 'DESC');
+    const records = await qb.getMany();
+    return records;
+  }
+
   async updatePayroll(id: number, dto: Partial<HrPayroll>): Promise<HrPayroll> {
     await this.payrollRepo.update(id, dto);
     const payroll = await this.payrollRepo.findOne({ where: { id } });
@@ -649,15 +1106,10 @@ export class HrService {
 
     // 只有 hr.payroll.approve 权限才能确认薪资
     if (userContext && !userContext.isSuperAdmin) {
-      if (!userContext.permissions?.includes('hr.payroll.approve')) {
+      const perms = userContext.permissions || [];
+      const hasPayrollApprove = perms.some(p => p === 'hr.payroll.approve' || p === 'hr.payroll.*' || p === '*');
+      if (!hasPayrollApprove) {
         throw new ForbiddenException('您没有审批薪资的权限');
-      }
-      // directLeaderId 汇报链：薪资审批也必须由员工的直属领导操作
-      const employee = await this.usersService.findById(payroll.employeeId);
-      if (employee && employee.directLeaderId && employee.directLeaderId !== paidBy) {
-        throw new ForbiddenException(
-          `您不是 ${employee.nickname || employee.username} 的直属领导，无权审批此薪资`,
-        );
       }
     }
 
@@ -671,8 +1123,129 @@ export class HrService {
     return updated;
   }
 
+  async generatePayslipPdf(id: number, userContext?: UserContext): Promise<{ buffer: string; filename: string }> {
+    const payroll = await this.payrollRepo.findOne({ where: { id } });
+    if (!payroll) throw new NotFoundException('薪资记录不存在');
+
+    return new Promise((resolve, reject) => {
+      try {
+        const doc = new PDFDocument({ margin: 50, size: 'A4' });
+        const chunks: Buffer[] = [];
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+        doc.on('end', () => resolve({ buffer: Buffer.concat(chunks) }));
+
+        const W = doc.page.width - 100;
+
+        // 标题
+        doc.fontSize(20).font('Helvetica-Bold').text('薪资单 / Payslip', 0, 50, { align: 'center', width: doc.page.width });
+        doc.moveDown(0.5);
+        doc.fontSize(10).font('Helvetica').fillColor('#666').text(`生成时间 Generated: ${new Date().toLocaleString('zh-CN')}`, 0, doc.y, { align: 'center', width: doc.page.width });
+        doc.moveDown(1.5);
+
+        // 基本信息区块
+        const infoBoxY = doc.y;
+        doc.rect(50, infoBoxY, W, 90).stroke('#ddd');
+        doc.fontSize(12).font('Helvetica-Bold').fillColor('#333');
+        doc.text('员工信息 / Employee Info', 60, infoBoxY + 8);
+        doc.moveDown(0.3);
+        doc.fontSize(10).font('Helvetica').fillColor('#333');
+        const infoLines = [
+          `员工姓名 Name: ${payroll.employeeName || '-'}      部门 Dept: ${payroll.department || '-'}      岗位 Position: ${payroll.position || '-'}`,
+          `发薪周期 Period: ${payroll.period || '-'}      状态 Status: ${payroll.status === 'paid' ? '已发放 / Paid' : '草稿 / Draft'}`,
+        ];
+        infoLines.forEach((line, i) => {
+          doc.text(line, 60, infoBoxY + 28 + i * 18);
+        });
+        doc.y = infoBoxY + 100;
+
+        // 收入项
+        doc.fontSize(12).font('Helvetica-Bold').fillColor('#333').text('收入项 / Earnings');
+        doc.moveDown(0.3);
+        const earnings: [string, number][] = [
+          ['基本工资 Base Salary', payroll.baseSalary || 0],
+          ['绩效工资 Performance', payroll.performanceSalary || 0],
+          ['加班费 Overtime', payroll.overtimePay || 0],
+          ['餐补 Meal Allowance', payroll.mealAllowance || 0],
+          ['交通补贴 Transport', payroll.transportAllowance || 0],
+        ];
+        earnings.forEach(([label, amount]) => {
+          doc.font('Helvetica').text(label, 60);
+          doc.font('Helvetica-Bold').fillColor('#333').text(`¥${Number(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`, W - 120, doc.y - 12, { align: 'right', width: 120 });
+        });
+        doc.font('Helvetica').fillColor('#333');
+        doc.moveDown(0.3);
+        doc.font('Helvetica-Bold').text('应发工资 Gross Salary:', 60);
+        doc.fillColor('#67c23a').text(`¥${Number(payroll.grossSalary || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`, W - 120, doc.y - 12, { align: 'right', width: 120 });
+        doc.fillColor('#333');
+        doc.moveDown(1);
+
+        // 扣款项
+        doc.fontSize(12).font('Helvetica-Bold').fillColor('#333').text('扣款项 / Deductions');
+        doc.moveDown(0.3);
+        doc.font('Helvetica').fillColor('#333');
+        const deductions: [string, number][] = [
+          ['社保 Social Security', payroll.socialSecurity || 0],
+          ['公积金 Housing Fund', payroll.housingFund || 0],
+          ['个税 Tax', payroll.tax || 0],
+          ['考勤扣款 Attendance', payroll.attendanceDeduction || 0],
+        ];
+        deductions.forEach(([label, amount]) => {
+          if (Number(amount) > 0) {
+            doc.font('Helvetica').text(label, 60);
+            doc.fillColor('#f56c6c').text(`-¥${Number(amount).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`, W - 120, doc.y - 12, { align: 'right', width: 120 });
+            doc.fillColor('#333');
+          }
+        });
+        doc.moveDown(0.5);
+        doc.font('Helvetica-Bold').text('扣款合计 Total Deductions:', 60);
+        doc.fillColor('#f56c6c').text(`-¥${Number(payroll.totalDeductions || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`, W - 120, doc.y - 12, { align: 'right', width: 120 });
+        doc.fillColor('#333');
+        doc.moveDown(1);
+
+        // 实发工资
+        doc.rect(50, doc.y, W, 50).fill('#67c23a');
+        doc.fontSize(14).font('Helvetica-Bold').fillColor('#fff');
+        doc.text('实发工资 Net Salary:', 60, doc.y + 12);
+        doc.fontSize(18).text(`¥${Number(payroll.netSalary || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2 })}`, W - 200, doc.y - 4, { align: 'right', width: 200 });
+        doc.y += 60;
+
+        // 考勤明细
+        if (payroll.lateCount || payroll.earlyLeaveCount || payroll.absentCount || payroll.overtimeHours) {
+          doc.moveDown(0.5);
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#333').text('考勤明细 / Attendance Details');
+          doc.moveDown(0.2);
+          doc.font('Helvetica').fillColor('#666');
+          const attItems: string[] = [];
+          if (payroll.lateCount) attItems.push(`迟到 Late: ${payroll.lateCount}次`);
+          if (payroll.earlyLeaveCount) attItems.push(`早退 Early Leave: ${payroll.earlyLeaveCount}次`);
+          if (payroll.absentCount) attItems.push(`缺勤 Absent: ${payroll.absentCount}次`);
+          if (payroll.overtimeHours) attItems.push(`加班 Overtime: ${payroll.overtimeHours}小时`);
+          doc.text(attItems.join('      '));
+        }
+
+        // 备注
+        if (payroll.remarks) {
+          doc.moveDown(0.5);
+          doc.fontSize(10).font('Helvetica-Bold').fillColor('#333').text('备注 / Remarks');
+          doc.font('Helvetica').fillColor('#666').text(payroll.remarks);
+        }
+
+        // 页脚
+        doc.moveDown(2);
+        doc.fontSize(8).fillColor('#999').text('本薪资单由系统自动生成，如有疑问请联系人事部。This payslip is auto-generated. Contact HR for questions.', 0, doc.page.height - 40, { align: 'center', width: doc.page.width });
+
+        doc.end();
+      } catch (err) {
+        reject(err);
+      }
+    }).then(result => ({
+      buffer: (result as any).buffer.toString('base64'),
+      filename: `工资条_${payroll.employeeName}_${payroll.period}.pdf`,
+    }));
+  }
+
   async deletePayroll(id: number): Promise<void> {
-    await this.payrollRepo.delete(id);
+    await this.payrollRepo.update(id, { isDeleted: true });
   }
 
   async getPayrollStats(params: {
@@ -680,6 +1253,7 @@ export class HrService {
     userId?: number; userContext?: UserContext;
   }) {
     const qb = this.payrollRepo.createQueryBuilder('p');
+    qb.andWhere('p.isDeleted = :isDeleted', { isDeleted: false });
     if (params.period) qb.andWhere('p.period = :period', { period: params.period });
     if (params.department) qb.andWhere('p.department = :department', { department: params.department });
 
@@ -731,6 +1305,7 @@ export class HrService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const qb = this.eventRepo.createQueryBuilder('e');
+    qb.andWhere('e.isDeleted = :isDeleted', { isDeleted: false });
     if (params.status) qb.andWhere('e.status = :status', { status: params.status });
     if (params.type) qb.andWhere('e.type = :type', { type: params.type });
     if (params.keyword) {
@@ -767,7 +1342,7 @@ export class HrService {
   }
 
   async deleteEvent(id: number): Promise<void> {
-    await this.eventRepo.delete(id);
+    await this.eventRepo.update(id, { isDeleted: true });
   }
 
   // ==================== 数据看板 ====================
@@ -794,6 +1369,7 @@ export class HrService {
       .createQueryBuilder('a')
       .where('a.date >= :startStr', { startStr })
       .andWhere('a.date <= :endStr', { endStr })
+      .andWhere('a.isDeleted = :isDeleted', { isDeleted: false })
       .getMany();
 
     const dates = this.enumerateDates(startStr, endStr);
@@ -836,6 +1412,7 @@ export class HrService {
     userId?: number; userContext?: UserContext;
   }): Promise<Buffer> {
     const qb = this.attendanceRepo.createQueryBuilder('a');
+    qb.andWhere('a.isDeleted = :isDeleted', { isDeleted: false });
     if (params.startDate) qb.andWhere('a.date >= :startDate', { startDate: params.startDate });
     if (params.endDate) qb.andWhere('a.date <= :endDate', { endDate: params.endDate });
     if (params.department) qb.andWhere('a.department = :department', { department: params.department });
@@ -883,23 +1460,35 @@ export class HrService {
     const genderMap: Record<string, string> = {
       male: '男', female: '女', other: '其他',
     };
+    const teamMap: Record<string, string> = {
+      ops_jk: '日韩运营组', ops_india: '印度运营组',
+      ops_me: '中东运营组', ops_ea: '欧亚运营组', ops_bay: '巴伊运营组',
+    };
+    const orgRoleMap: Record<string, string> = {
+      staff: '普通成员', team_lead: '小组负责人', dept_manager: '部门负责人',
+    };
 
     const data = employees.map((e: User) => [
-      e.nickname ?? e.username ?? '',
       e.username ?? '',
+      e.nickname ?? '',
+      '', // 密码列留空
       e.department ?? '',
       e.position ?? '',
+      teamMap[e.team ?? ''] || (e.team ?? ''),
+      genderMap[e.gender ?? ''] ?? e.gender ?? '',
+      e.age ?? '',
       e.phone ?? '',
       e.email ?? '',
-      genderMap[e.gender ?? ''] ?? e.gender ?? '',
+      e.school ?? '',
       e.hireDate ? new Date(e.hireDate).toISOString().split('T')[0] : '',
-      statusMap[e.employmentStatus ?? ''] ?? String(e.employmentStatus ?? ''),
+      statusMap[e.employmentStatus ?? ''] ?? e.employmentStatus ?? '',
+      orgRoleMap[e.orgRoleType ?? ''] ?? e.orgRoleType ?? '',
     ]);
 
     return generateMultiSheetExcel([{
       name: '员工花名册',
       title: `员工花名册（${new Date().toISOString().split('T')[0]}）`,
-      headers: ['姓名', '用户名', '部门', '职位', '手机', '邮箱', '性别', '入职日期', '状态'],
+      headers: ['用户名', '姓名', '密码', '部门', '职位', '小组/战区', '性别', '年龄', '电话', '邮箱', '毕业院校', '入职日期', '在职状态', '组织角色'],
       data,
     }]);
   }

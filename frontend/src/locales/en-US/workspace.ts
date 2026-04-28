@@ -50,6 +50,8 @@ export default {
     companyCultureDesc: 'Company events, culture stories and photos.',
     softwareDownloads: 'Software Downloads',
     softwareDownloadsDesc: 'VPN, utilities and commonly used tools.',
+    employeeSelfService: 'My Affairs',
+    employeeSelfServiceDesc: 'Attendance, payroll, training, performance & recruitment.',
   },
   tools: {
     title: 'Tools',

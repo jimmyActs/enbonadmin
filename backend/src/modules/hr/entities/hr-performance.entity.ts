@@ -9,30 +9,6 @@ import {
 export type PerformanceStatus = 'draft' | 'submitted' | 'reviewed' | 'completed';
 export type PerformanceRating = 'A' | 'B' | 'C' | 'D' | 'E';
 
-@Entity('hr_performance_template')
-export class HrPerformanceTemplate {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ nullable: true })
-  name: string;
-
-  @Column({ nullable: true })
-  position: string;
-
-  @Column({ type: 'text', nullable: true })
-  indicators: string;
-
-  @Column({ default: true })
-  isActive: boolean;
-
-  @CreateDateColumn()
-  createdAt: Date;
-
-  @UpdateDateColumn()
-  updatedAt: Date;
-}
-
 @Entity('hr_performance')
 export class HrPerformance {
   @PrimaryGeneratedColumn()
@@ -88,6 +64,9 @@ export class HrPerformance {
 
   @Column({ type: 'varchar', length: 50, default: 'draft' })
   status: PerformanceStatus;
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
 
   @Column({ nullable: true })
   createdBy: number;

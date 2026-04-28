@@ -88,8 +88,8 @@ export class CrmLead {
   @Column({ type: 'integer', nullable: true })
   assignedTo: number | null; // 被分配给哪个销售（负责人）
 
-  @Column({ type: 'datetime', nullable: true })
-  assignedAt: Date; // 分配时间
+  @Column({ type: 'timestamp', nullable: true })
+  assignedAt: Date | null; // 分配时间
 
   @Column({ type: 'integer', nullable: true })
   createdBy: number | null; // 创建人（可能是管理员录入）
@@ -106,17 +106,17 @@ export class CrmLead {
   @Column({ type: 'integer', nullable: true })
   convertedCustomerId: number | null; // 转化成的客户ID
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   convertedAt: Date; // 转化时间
 
   @Column({ type: 'text', nullable: true })
   lostReason: string; // 流失原因
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lostAt: Date; // 流失时间
 
   // ========== 跟进记录（JSON 存摘要，详细在活动记录表） ==========
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lastFollowUpAt: Date; // 最近跟进时间
 
   @Column({ type: 'text', nullable: true })
@@ -128,6 +128,19 @@ export class CrmLead {
 
   @Column({ nullable: true })
   websiteId: number; // 来源网站配置ID
+
+  // ========== 公海机制 ==========
+  @Column({ default: false })
+  isInPool: boolean; // 是否在公海中（未分配）
+
+  @Column({ type: 'text', nullable: true })
+  poolReason: string | null; // 入公海原因
+
+  @Column({ type: 'timestamp', nullable: true })
+  poolTime: Date | null; // 入公海时间
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
 
   @CreateDateColumn()
   createdAt: Date;

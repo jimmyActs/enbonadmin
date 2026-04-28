@@ -23,7 +23,7 @@ export class SoftwareMetadata {
   @Column({ type: 'varchar', length: 64, nullable: true })
   version?: string | null;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   releaseDate?: Date | null;
 
   @Column({ type: 'text', nullable: true })

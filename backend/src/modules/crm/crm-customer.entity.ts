@@ -72,7 +72,7 @@ export class CrmCustomer {
   @Column({ nullable: true })
   inquirySource: string; // 询盘来源（官网后台导入/展会名片/社媒询盘/电话/朋友推荐等）
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   inquiryDate: Date; // 询盘日期
 
   @Column({ type: 'text', nullable: true })
@@ -121,13 +121,13 @@ export class CrmCustomer {
   @Column({ type: 'varchar', length: 100, nullable: true })
   department: string | null; // 所属部门（冗余字段，关联创建人所在部门）
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   ownerAssignedAt: Date; // 归属该业务的时间（每次变更 ownerId 时更新）
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lastMaintainAt: Date; // 最后维护客户信息的时间（更新任意字段时自动更新）
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   lastContact: Date | null; // 最近联系时间（主动联系客户的记录时间）
 
   // ========== 公海机制 ==========
@@ -137,7 +137,7 @@ export class CrmCustomer {
   @Column({ nullable: true })
   poolReason: PoolReason; // 入公海原因
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   poolTime: Date; // 入公海时间
 
   // ========== 关联信息 ==========
@@ -156,6 +156,12 @@ export class CrmCustomer {
 
   @Column({ type: 'integer', default: 1 })
   version: number; // 乐观锁版本号，防止并发抢客
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
+
+  @Column({ type: 'timestamp', nullable: true })
+  deletedAt: Date | null; // 软删除时间
 
   @CreateDateColumn()
   createdAt: Date;

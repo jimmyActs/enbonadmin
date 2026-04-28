@@ -99,6 +99,8 @@ export default {
     companyCultureDesc: '公司活动记录、历年活动照片等',
     softwareDownloads: '软件下载',
     softwareDownloadsDesc: 'VPN、常用办公工具等',
+    employeeSelfService: '我的事务',
+    employeeSelfServiceDesc: '考勤请假、薪资明细、培训绩效、招聘需求',
   },
   tools: {
     title: '工具区',

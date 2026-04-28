@@ -30,10 +30,10 @@ export class Announcement {
   @Column({ default: true })
   isActive: boolean; // 是否激活
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   publishTime: Date | null; // 发布时间
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   expireTime: Date | null; // 过期时间（可选）
 
   @CreateDateColumn()

@@ -94,6 +94,8 @@ export default {
   
   // Actions
   viewDetail: 'View Details',
+  importEmployees: 'Import Employees',
+  exportEmployees: 'Export Roster',
   deleteConfirm: 'Are you sure you want to delete employee "{name}"?',
   
   // Permissions

@@ -2,19 +2,40 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import * as express from 'express';
-import history from 'connect-history-api-fallback';
+import * as fs from 'fs';
 import { join } from 'path';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  
-  // 启用CORS - 允许所有来源（开发环境）
-  // 生产环境应该限制为特定域名
+
+  const isProduction = process.env.NODE_ENV === 'production';
+  const isDev = process.env.NODE_ENV === 'development';
+
+  // 全局异常过滤器
+  app.useGlobalFilters(new GlobalExceptionFilter());
+
+  // CORS 配置
+  const allowedOrigins = isProduction
+    ? (process.env.ALLOWED_ORIGINS?.split(',') || [])
+    : [
+        'http://localhost:5173',
+        'http://localhost:5174',
+        'http://127.0.0.1:5173',
+        'http://127.0.0.1:5174',
+      ];
+
+  if (isProduction && allowedOrigins.length === 0) {
+    console.warn('⚠️ WARNING: CORS origins not configured for production!');
+  }
+
   app.enableCors({
-    origin: true, // 允许所有来源（开发环境）
+    origin: isDev ? true : (allowedOrigins.length > 0 ? allowedOrigins : false),
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+    exposedHeaders: isProduction ? ['Content-Range', 'X-Content-Range'] : [],
+    maxAge: isProduction ? 600 : 86400,
   });
   
   // 全局验证管道
@@ -30,33 +51,40 @@ async function bootstrap() {
   // 设置全局前缀（API 保持 /api 开头）
   app.setGlobalPrefix('api');
 
-  // 1) SPA history fallback：除了 /api 之外，其它路由都回退到前端 index.html
-  // 某些 Nest 版本的 getInstance 不支持泛型，这里用类型断言兼容旧版本
   const expressApp = app.getHttpAdapter().getInstance() as express.Express;
-  expressApp.use(
-    history({
-      rewrites: [
-        {
-          // 保留 /api 开头的请求给 Nest 接口处理
-          from: /^\/api\/.*$/,
-          to: (ctx) => ctx.parsedUrl.pathname || ctx.parsedUrl.path,
-        },
-      ],
-    }),
-  );
-
-  // 2) 托管前端静态文件（Vite build 输出目录）
-  // 使用 process.cwd() 保证永远指向项目根目录下的 frontend/dist
+  
+  // SPA history fallback 中间件：替代 connect-history-api-fallback
   const clientDist = join(process.cwd(), '..', 'frontend', 'dist');
-  // console.log('Serving client from:', clientDist);
+  const indexPath = join(clientDist, 'index.html');
+  
+  expressApp.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // API 请求直接通过
+    if (req.path.startsWith('/api/')) {
+      return next();
+    }
+    
+    // 检查请求的文件是否存在
+    const filePath = join(clientDist, req.path);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      return next();
+    }
+    
+    // 对于非API请求，返回 index.html（支持 SPA 路由）
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    
+    next();
+  });
+
+  // 托管前端静态文件
   expressApp.use(express.static(clientDist));
   
-  // 默认端口改为 3002，避免与其它本地项目（如 enbon-ai 前端 3000）冲突
   const port = process.env.PORT || 3002;
-  const host = process.env.HOST || '0.0.0.0'; // 允许外部访问
+  const host = process.env.HOST || '0.0.0.0';
   await app.listen(port, host);
   
-  // 获取本机IP地址（用于显示访问地址）
+  // 获取本机IP地址
   const os = require('os');
   const networkInterfaces = os.networkInterfaces();
   let localIP = 'localhost';

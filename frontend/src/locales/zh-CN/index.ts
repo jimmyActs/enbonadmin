@@ -13,6 +13,7 @@ import workspace from './workspace'
 import workgroup from './workgroup'
 import employees from './employees'
 import profile from './profile'
+import selfService from './selfService'
 
 export default {
   common,
@@ -29,4 +30,5 @@ export default {
   workgroup,
   employees,
   profile,
+  selfService,
 }

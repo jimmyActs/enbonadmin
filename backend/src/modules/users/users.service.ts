@@ -1,14 +1,17 @@
-import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit, ConflictException, forwardRef, Inject } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as bcrypt from 'bcrypt';
 import { User, UserRole, Department } from './entities/user.entity';
+import { PermissionEngineService } from '../permissions/permission-engine.service';
 
 @Injectable()
 export class UsersService implements OnModuleInit {
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    @Inject(forwardRef(() => PermissionEngineService))
+    private readonly permissionEngine: PermissionEngineService,
   ) {}
 
   async onModuleInit() {
@@ -28,7 +31,23 @@ export class UsersService implements OnModuleInit {
       ...userData,
       password: hashedPassword,
     });
-    return this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
+
+    // 创建用户后，自动根据岗位分配权限
+    if (savedUser.position && savedUser.department) {
+      try {
+        await this.permissionEngine.autoAssignRoleByPosition(
+          savedUser.id,
+          savedUser.position,
+          savedUser.department,
+        );
+      } catch (err) {
+        // 权限分配失败不影响用户创建，只记录日志
+        console.error(`[UsersService] 为用户 ${savedUser.username} 自动分配权限失败:`, err.message);
+      }
+    }
+
+    return savedUser;
   }
 
   /**
@@ -37,6 +56,52 @@ export class UsersService implements OnModuleInit {
   async findByUsername(username: string): Promise<User | undefined> {
     const user = await this.userRepository.findOne({ where: { username } });
     return user || undefined;
+  }
+
+  /**
+   * 根据登录用户名查找用户
+   */
+  async findByLoginUsername(loginUsername: string): Promise<User | undefined> {
+    if (!loginUsername) return undefined;
+    const user = await this.userRepository.findOne({ where: { loginUsername } });
+    return user || undefined;
+  }
+
+  /**
+   * 根据手机号查找用户
+   */
+  async findByPhone(phone: string): Promise<User | undefined> {
+    if (!phone) return undefined;
+    const user = await this.userRepository.findOne({ where: { phone } });
+    return user || undefined;
+  }
+
+  /**
+   * 验证登录用户名是否唯一
+   */
+  async checkLoginUsernameUnique(loginUsername: string, excludeUserId?: number): Promise<boolean> {
+    if (!loginUsername) return true;
+    const query = this.userRepository.createQueryBuilder('user')
+      .where('user.loginUsername = :loginUsername', { loginUsername });
+    if (excludeUserId) {
+      query.andWhere('user.id != :excludeUserId', { excludeUserId });
+    }
+    const count = await query.getCount();
+    return count === 0;
+  }
+
+  /**
+   * 验证手机号是否唯一
+   */
+  async checkPhoneUnique(phone: string, excludeUserId?: number): Promise<boolean> {
+    if (!phone) return true;
+    const query = this.userRepository.createQueryBuilder('user')
+      .where('user.phone = :phone', { phone });
+    if (excludeUserId) {
+      query.andWhere('user.id != :excludeUserId', { excludeUserId });
+    }
+    const count = await query.getCount();
+    return count === 0;
   }
 
   /**
@@ -68,7 +133,24 @@ export class UsersService implements OnModuleInit {
     }
 
     Object.assign(user, userData);
-    return this.userRepository.save(user);
+    const savedUser = await this.userRepository.save(user);
+
+    // 岗位或部门变动时，重新分配岗位权限
+    const newPosition = userData.position ?? user.position;
+    const newDepartment = userData.department ?? user.department;
+    if (newPosition && newDepartment) {
+      try {
+        await this.permissionEngine.autoAssignRoleByPosition(
+          savedUser.id,
+          newPosition,
+          newDepartment,
+        );
+      } catch (err) {
+        console.error(`[UsersService] 为用户 ${savedUser.username} 更新权限失败:`, err.message);
+      }
+    }
+
+    return savedUser;
   }
 
   /**

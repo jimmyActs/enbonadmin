@@ -34,7 +34,7 @@ export class CrmShipmentFile {
   @Column({ nullable: true })
   shipmentBatch: string; // 出货批次名称（如 "2026年3月第二批"）
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   shipmentDate: Date; // 出货日期
 
   @Column({ nullable: true })

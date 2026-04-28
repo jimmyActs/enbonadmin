@@ -44,17 +44,11 @@ const currentLanguageLabel = computed(() => {
 
 const handleLanguageChange = (lang: 'zh-CN' | 'en-US') => {
   if (lang === currentLocale.value) return
-  
+
   setLocale(lang)
   locale.value = lang
-  
-  // 提示用户语言已切换
+
   ElMessage.success(lang === 'zh-CN' ? '已切换到中文' : 'Switched to English')
-  
-  // 延迟一下再重新加载，让用户看到提示
-  setTimeout(() => {
-    window.location.reload()
-  }, 300)
 }
 </script>
 

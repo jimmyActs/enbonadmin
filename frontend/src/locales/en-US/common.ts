@@ -8,6 +8,7 @@ export default {
   search: 'Search',
   add: 'Add',
   edit: 'Edit',
+  view: 'View',
   delete: 'Delete',
   save: 'Save',
   download: 'Download',
@@ -50,6 +51,7 @@ export default {
   createSuccess: 'Created successfully',
   updateSuccess: 'Updated successfully',
   saveSuccess: 'Saved successfully',
+  submitSuccess: 'Submitted successfully',
   deleteSuccess: 'Deleted successfully',
   operations: 'Operations',
   to: 'To',
@@ -58,6 +60,7 @@ export default {
   backToHome: 'Back to Home',
   goBack: 'Go Back',
   noPermission: 'You do not have permission to access this page',
+  noModuleAccess: 'You do not have permission to access this module',
   userInfoLoadFailed: 'Failed to load user information, please login again',
   featureComingSoon: 'This feature is under development. Please stay tuned.',
   upload: 'Upload',
@@ -66,5 +69,34 @@ export default {
   imageTypeLimit: 'Only JPG/PNG/GIF/WEBP images are allowed',
   imageSizeLimit: 'Image size must be less than 10MB',
   clear: 'Clear',
+  remarks: 'Remarks',
+
+  // Drive / Storage
+  driveLetter: 'Drive',
+  systemName: 'System Name',
+  enableQuotaScan: 'Enable Quota Scan',
+  workspaceStorageConfig: 'Workspace Storage Config',
+  module: 'Module',
+  rootDirectory: 'Root Directory',
+  driveTip: 'Enabled drives will appear in the File Manager. Enable quota scan for network drives to recursively calculate usage (keep disabled for local development to avoid performance issues).',
+  driveTipShort: 'Enable quota scan for recursive directory size calculation.',
+
+  // Permissions
+  'permissions.summaryTitle': 'Current Permission List',
+  'permissions.assignSuccess': 'Permission assigned successfully, current session permissions have been refreshed',
+
+  // Encouragement messages
+  encouragement: [
+    'Work hard, live happily',
+    'Keep going today',
+    'Stay positive, embrace new challenges',
+    'Every day is a new beginning',
+    'Believe in yourself',
+    'Stay passionate, pursue excellence',
+    'Make every day meaningful'
+  ],
+
+  // Date
+  date: 'Date',
 }
 

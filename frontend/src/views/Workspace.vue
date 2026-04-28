@@ -19,6 +19,20 @@
         </div>
       </div>
 
+      <!-- 员工自助 -->
+      <div
+        class="quick-card-item fade-in-delay-2"
+        @click="router.push({ name: 'SelfService' })"
+      >
+        <div class="quick-card-icon self-service-icon">
+          <el-icon><UserFilled /></el-icon>
+        </div>
+        <div class="quick-card-content">
+          <div class="quick-card-title">{{ $t('workspace.quickCards.employeeSelfService') }}</div>
+          <div class="quick-card-desc">{{ $t('workspace.quickCards.employeeSelfServiceDesc') }}</div>
+        </div>
+      </div>
+
       <!-- 公司文化 -->
       <div
         class="quick-card-item fade-in-delay-2"
@@ -240,10 +254,10 @@ import { useI18n } from 'vue-i18n'
 import { useRouter, useRoute } from 'vue-router'
 import { getMyApplications } from '../api/material-applications'
 import type { MaterialApplication } from '../api/material-applications'
-import { 
-  Notebook, 
-  Calendar, 
-  DataAnalysis, 
+import {
+  Notebook,
+  Calendar,
+  DataAnalysis,
   ChatLineRound,
   Box,
   VideoCamera,
@@ -253,7 +267,8 @@ import {
   Plus,
   Document,
   Clock,
-  FolderOpened
+  FolderOpened,
+  UserFilled,
 } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 import { 
@@ -586,6 +601,10 @@ const getRowClassName = () => {
     // 新增卡片的配色
     .company-files-icon {
       background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);
+    }
+
+    .self-service-icon {
+      background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
     }
 
     .company-culture-icon {

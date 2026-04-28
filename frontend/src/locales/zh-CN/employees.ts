@@ -94,6 +94,8 @@ export default {
   
   // 操作
   viewDetail: '查看详细',
+  importEmployees: '导入员工',
+  exportEmployees: '导出花名册',
   deleteConfirm: '确定要删除员工 "{name}" 吗？',
   
   // 权限

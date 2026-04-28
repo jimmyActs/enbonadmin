@@ -93,7 +93,7 @@ export class CrmSalesTarget {
   @Column({ type: 'integer', nullable: true })
   reviewedBy: number; // 审核人（主管）ID
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   reviewedAt: Date; // 审核时间
 
   @Column({ type: 'text', nullable: true })

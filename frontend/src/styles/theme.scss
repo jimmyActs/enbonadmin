@@ -145,58 +145,7 @@ body {
   transform: none !important;
 }
 
-.el-overlay {
-  z-index: 99998 !important;
-  position: fixed !important;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.6) !important;
-  overflow: hidden !important;
-  pointer-events: auto !important;
-  transform: none !important;
-}
-
-.el-dialog__overlay {
-  z-index: 99998 !important;
-  position: fixed !important;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.6) !important;
-  overflow: hidden !important;
-  pointer-events: auto !important;
-  transform: none !important;
-}
-
-.el-dialog {
-  position: relative !important;
-  z-index: 100000 !important;
-  max-height: 90vh !important;
-  overflow: unset !important;
-  display: flex !important;
-  flex-direction: column !important;
-  border-radius: var(--r-xl);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-  border: 1px solid var(--stroke);
-  backdrop-filter: none !important;
-  -webkit-backdrop-filter: none !important;
-  transform: none !important;
-}
-
-.el-dialog__header {
-  flex-shrink: 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(255, 255, 255, 0.78));
-}
-
-.el-dialog__body {
-  overflow-y: auto !important;
-  flex: 1 1 auto !important;
-  min-height: 0 !important;
-}
-
-.el-dialog__footer {
-  flex-shrink: 0;
-  padding-top: 16px;
-  border-top: 1px solid rgba(0, 0, 0, 0.06);
-}
+/* el-dialog 弹窗样式已统一到 src/style.css */
 
 .el-table {
   border-radius: var(--r-lg);

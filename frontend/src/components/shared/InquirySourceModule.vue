@@ -1,96 +1,245 @@
 <template>
   <div class="inquiry-source-module">
-    <el-card class="module-card">
-      <template #header>
-        <div class="card-header">
-          <div class="header-left">
-            <el-icon><Connection /></el-icon>
-            <span>{{ $t('crm.inquirySources.title') }}</span>
-          </div>
-          <div class="header-actions">
-            <el-button type="info" :icon="Upload" @click="showImportDialog = true" v-if="isAdmin">
-              {{ $t('hr.attendance.import') }}
-            </el-button>
-            <el-button type="primary" :icon="Plus" @click="handleAdd" v-if="isAdmin">
-              {{ $t('crm.inquirySources.add') }}
-            </el-button>
-          </div>
-        </div>
-      </template>
+    <!-- 子标签切换：询盘来源配置 / 待分配询盘 -->
+    <div class="sub-tabs">
+      <el-radio-group v-model="activeSubTab">
+        <el-radio-button value="config">
+          <el-icon><Connection /></el-icon>
+          {{ $t('crm.inquirySources.title') }}
+        </el-radio-button>
+        <el-radio-button value="pending" v-if="canAssign">
+          <el-icon><List /></el-icon>
+          {{ $t('crm.inquirySources.pendingTab') }}
+          <el-badge :value="pendingStats.total" class="tab-badge" type="warning"
+            v-if="pendingStats.total > 0" />
+        </el-radio-button>
+      </el-radio-group>
+    </div>
 
-      <!-- 统计卡片 -->
-      <div class="stats-row">
-        <div class="stat-item">
-          <div class="stat-value">{{ sources.length }}</div>
-          <div class="stat-label">{{ $t('crm.inquirySources.total') }}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value success">{{ activeCount }}</div>
-          <div class="stat-label">{{ $t('crm.inquirySources.active') }}</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value info">{{ autoAssignCount }}</div>
-          <div class="stat-label">{{ $t('crm.inquirySources.autoAssign') }}</div>
-        </div>
-      </div>
-
-      <!-- 询盘来源列表：max-height + doLayout 避免表体高度为 0；row-key 函数避免 id 异常 -->
-      <el-table
-        ref="sourceTableRef"
-        class="inquiry-source-table"
-        :data="sources"
-        stripe
-        v-loading="loading"
-        :row-key="getRowKey"
-        max-height="620"
-        style="width: 100%"
-        border
-      >
-        <el-table-column prop="name" :label="$t('crm.inquirySources.name')" min-width="150">
-          <template #default="{ row }">
-            <div class="source-name">
-              <span>{{ row.name }}</span>
-              <el-tag size="small" :type="row.isActive ? 'success' : 'info'" class="ml-8">
-                {{ row.isActive ? $t('crm.inquirySources.enabled') : $t('crm.inquirySources.disabled') }}
-              </el-tag>
+    <!-- ==================== 询盘来源配置 ==================== -->
+    <div v-show="activeSubTab === 'config'">
+      <el-card class="module-card">
+        <template #header>
+          <div class="card-header">
+            <div class="header-left">
+              <el-icon><Connection /></el-icon>
+              <span>{{ $t('crm.inquirySources.title') }}</span>
             </div>
-          </template>
-        </el-table-column>
-        <el-table-column :label="$t('crm.inquirySources.websiteType')" width="140">
-          <template #default="{ row }">
-            <span>{{ websiteTypes[row.websiteType] || row.websiteType }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="assignedDepartment" :label="$t('crm.inquirySources.assignedDepartment')" width="140" />
-        <el-table-column :label="$t('crm.inquirySources.assignee')" width="130">
-          <template #default="{ row }">
-            <span>{{ getOwnerName(row.assignedToUserId) }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column :label="$t('crm.inquirySources.autoAssign')" width="100">
-          <template #default="{ row }">
-            <el-tag size="small" :type="row.autoAssignEnabled ? 'success' : 'info'">
-              {{ row.autoAssignEnabled ? $t('common.yes') : $t('common.no') }}
-            </el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column prop="totalInquiries" :label="$t('crm.inquirySources.totalInquiries')" width="110" align="center" />
-        <el-table-column prop="pendingInquiries" :label="$t('crm.inquirySources.pending')" width="90" align="center" />
-        <el-table-column :label="$t('crm.inquirySources.lastFetch')" width="160">
-          <template #default="{ row }">
-            <span>{{ row.lastFetchAt ? formatDate(row.lastFetchAt) : '-' }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column :label="$t('common.operations')" width="160" fixed="right" v-if="isAdmin">
-          <template #default="{ row }">
-            <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)">{{ $t('common.edit') }}</el-button>
-            <el-button type="danger" size="small" :icon="Delete" @click="handleDelete(row)">{{ $t('common.delete') }}</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+            <div class="header-actions">
+              <el-button type="info" :icon="Upload" @click="showImportDialog = true" v-if="isAdmin">
+                {{ $t('hr.attendance.import') }}
+              </el-button>
+              <el-button type="primary" :icon="Plus" @click="handleAdd" v-if="isAdmin">
+                {{ $t('crm.inquirySources.add') }}
+              </el-button>
+            </div>
+          </div>
+        </template>
 
-    <!-- 添加/编辑对话框 -->
+        <!-- 统计卡片 -->
+        <div class="stats-row">
+          <div class="stat-item">
+            <div class="stat-value">{{ sources.length }}</div>
+            <div class="stat-label">{{ $t('crm.inquirySources.total') }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value success">{{ activeCount }}</div>
+            <div class="stat-label">{{ $t('crm.inquirySources.active') }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value info">{{ autoAssignCount }}</div>
+            <div class="stat-label">{{ $t('crm.inquirySources.autoAssign') }}</div>
+          </div>
+        </div>
+
+        <!-- 询盘来源列表 -->
+        <el-table
+          ref="sourceTableRef"
+          class="inquiry-source-table"
+          :data="sources"
+          stripe
+          v-loading="loading"
+          :row-key="getRowKey"
+          max-height="620"
+          style="width: 100%"
+          border
+        >
+          <el-table-column prop="name" :label="$t('crm.inquirySources.name')" min-width="150">
+            <template #default="{ row }">
+              <div class="source-name">
+                <span>{{ row.name }}</span>
+                <el-tag size="small" :type="row.isActive ? 'success' : 'info'" class="ml-8">
+                  {{ row.isActive ? $t('crm.inquirySources.enabled') : $t('crm.inquirySources.disabled') }}
+                </el-tag>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('crm.inquirySources.websiteType')" width="140">
+            <template #default="{ row }">
+              <span>{{ websiteTypes[row.websiteType] || row.websiteType }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="assignedDepartment" :label="$t('crm.inquirySources.assignedDepartment')" width="140" />
+          <el-table-column :label="$t('crm.inquirySources.assignee')" width="130">
+            <template #default="{ row }">
+              <span>{{ getOwnerName(row.assignedToUserId) }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('crm.inquirySources.autoAssign')" width="100">
+            <template #default="{ row }">
+              <el-tag size="small" :type="row.autoAssignEnabled ? 'success' : 'info'">
+                {{ row.autoAssignEnabled ? $t('common.yes') : $t('common.no') }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="totalInquiries" :label="$t('crm.inquirySources.totalInquiries')" width="110" align="center" />
+          <el-table-column prop="pendingInquiries" :label="$t('crm.inquirySources.pending')" width="90" align="center" />
+          <el-table-column :label="$t('crm.inquirySources.lastFetch')" width="160">
+            <template #default="{ row }">
+              <span>{{ row.lastFetchAt ? formatDate(row.lastFetchAt) : '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('common.operations')" width="160" fixed="right" v-if="isAdmin">
+            <template #default="{ row }">
+              <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)">{{ $t('common.edit') }}</el-button>
+              <el-button type="danger" size="small" :icon="Delete" @click="handleDelete(row)">{{ $t('common.delete') }}</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+    </div>
+
+    <!-- ==================== 待分配询盘 ==================== -->
+    <div v-show="activeSubTab === 'pending'">
+      <el-card class="module-card">
+        <template #header>
+          <div class="card-header">
+            <div class="header-left">
+              <el-icon><List /></el-icon>
+              <span>{{ $t('crm.inquirySources.pendingTitle') }}</span>
+            </div>
+            <div class="header-actions">
+              <el-button :icon="Refresh" @click="loadPendingLeads">{{ $t('common.refresh') }}</el-button>
+            </div>
+          </div>
+        </template>
+
+        <!-- 说明 -->
+        <el-alert
+          :title="$t('crm.inquirySources.pendingTabDesc')"
+          type="info"
+          :closable="false"
+          style="margin-bottom: 16px; border-radius: 8px;"
+        />
+
+        <!-- 统计 -->
+        <div class="stats-row" style="margin-bottom: 16px;">
+          <div class="stat-item">
+            <div class="stat-value warning">{{ pendingStats.total }}</div>
+            <div class="stat-label">{{ $t('crm.inquirySources.pendingCount') }}</div>
+          </div>
+        </div>
+
+        <!-- 筛选 -->
+        <div class="filter-bar" style="margin-bottom: 12px;">
+          <el-input
+            v-model="pendingKeyword"
+            :placeholder="$t('crm.leads.searchPlaceholder')"
+            clearable
+            style="width: 240px; margin-right: 12px;"
+            @input="debounceLoadPending"
+          >
+            <template #prefix><el-icon><Search /></el-icon></template>
+          </el-input>
+          <el-select
+            v-model="pendingSourceFilter"
+            :placeholder="$t('crm.leads.filterBySource')"
+            clearable
+            filterable
+            style="width: 160px; margin-right: 12px;"
+            @change="loadPendingLeads"
+          >
+            <el-option :label="$t('crm.leads.allSources')" value="" />
+            <el-option v-for="(label, key) in leadSources" :key="key" :label="label" :value="key" />
+          </el-select>
+          <el-select
+            v-model="pendingCountryFilter"
+            :placeholder="$t('sales.customers.country')"
+            clearable
+            filterable
+            style="width: 160px; margin-right: 12px;"
+            @change="loadPendingLeads"
+          >
+            <el-option :label="$t('crm.leads.allCountries')" value="" />
+            <el-option v-for="c in countries" :key="c" :label="c" :value="c" />
+          </el-select>
+        </div>
+
+        <!-- 待分配询盘列表 -->
+        <el-table
+          :data="pendingLeads"
+          stripe
+          v-loading="pendingLoading"
+          row-key="id"
+          max-height="540"
+          style="width: 100%"
+        >
+          <el-table-column :label="$t('crm.leads.contactName')" min-width="200">
+            <template #default="{ row }">
+              <div class="lead-contact">
+                <div class="contact-name">{{ row.contactName || '-' }}</div>
+                <div class="contact-company">{{ row.companyName || '-' }}</div>
+                <div class="contact-extra" v-if="row.email || row.phone">
+                  <span v-if="row.email"><el-icon><Message /></el-icon> {{ row.email }}</span>
+                  <span v-if="row.phone"><el-icon><Phone /></el-icon> {{ row.phone }}</span>
+                </div>
+              </div>
+            </template>
+          </el-table-column>
+          <el-table-column prop="country" :label="$t('sales.customers.country')" width="110">
+            <template #default="{ row }">
+              <span>{{ row.country || '-' }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column :label="$t('crm.leads.source')" width="130">
+            <template #default="{ row }">
+              <el-tag size="small">{{ getSourceLabel(row.source) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="priority" :label="$t('crm.leads.priority')" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" :type="getPriorityType(row.priority)">{{ getPriorityLabel(row.priority) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column prop="inquiryContent" :label="$t('crm.inquirySources.inquiryDetail')" min-width="200" show-overflow-tooltip />
+          <el-table-column prop="createdAt" :label="$t('crm.inquirySources.createdAt')" width="160">
+            <template #default="{ row }">{{ formatDate(row.createdAt) }}</template>
+          </el-table-column>
+          <el-table-column :label="$t('common.operations')" width="120" fixed="right">
+            <template #default="{ row }">
+              <el-button type="primary" size="small" :icon="Promotion" @click="openAssignDialog(row)">
+                {{ $t('crm.inquirySources.assign') }}
+              </el-button>
+            </template>
+          </el-table-column>
+          <template #empty>
+            <el-empty :description="$t('crm.inquirySources.pendingEmpty')" :image-size="80" />
+          </template>
+        </el-table>
+
+        <el-pagination
+          v-if="pendingTotal > 0"
+          v-model:current-page="pendingPage"
+          :page-size="pendingPageSize"
+          :total="pendingTotal"
+          layout="prev, pager, next, total"
+          @current-change="loadPendingLeads"
+          style="margin-top: 16px; justify-content: flex-end;"
+        />
+      </el-card>
+    </div>
+
+    <!-- 添加/编辑来源对话框 -->
     <el-dialog
       v-model="showDialog"
       :title="editingSource ? $t('crm.inquirySources.editSource') : $t('crm.inquirySources.addSource')"
@@ -161,6 +310,71 @@
       </template>
     </el-dialog>
 
+    <!-- 分配询盘对话框 -->
+    <el-dialog
+      v-model="showAssignDialog"
+      :title="$t('crm.inquirySources.assign') + ' — ' + (assigningLead?.contactName || '')"
+      width="520px"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
+      :close-on-click-modal="false"
+    >
+      <div class="assign-summary" v-if="assigningLead">
+        <div class="assign-info-row">
+          <span class="assign-info-label">{{ $t('sales.customers.country') }}:</span>
+          <span>{{ assigningLead.country || '-' }}</span>
+        </div>
+        <div class="assign-info-row">
+          <span class="assign-info-label">{{ $t('crm.leads.source') }}:</span>
+          <el-tag size="small">{{ getSourceLabel(assigningLead.source) }}</el-tag>
+        </div>
+        <div class="assign-info-row">
+          <span class="assign-info-label">{{ $t('crm.leads.priority') }}:</span>
+          <el-tag size="small" :type="getPriorityType(assigningLead.priority)">{{ getPriorityLabel(assigningLead.priority) }}</el-tag>
+        </div>
+        <div class="assign-info-row" v-if="assigningLead.inquiryContent">
+          <span class="assign-info-label">{{ $t('crm.inquirySources.inquiryDetail') }}:</span>
+          <span class="assign-info-content">{{ assigningLead.inquiryContent }}</span>
+        </div>
+      </div>
+      <el-form label-width="100px" style="margin-top: 16px;">
+        <el-form-item :label="$t('crm.inquirySources.assignTo')" required>
+          <el-select
+            v-model="assignTargetId"
+            filterable
+            :placeholder="$t('crm.inquirySources.assignPlaceholder')"
+            style="width: 100%;"
+          >
+            <el-option
+              v-for="user in salesUsers"
+              :key="user.id"
+              :label="(user.nickname || user.username) + ' — ' + (user.department || '')"
+              :value="user.id"
+            />
+          </el-select>
+        </el-form-item>
+        <el-form-item :label="$t('crm.inquirySources.assignRemark')">
+          <el-input
+            v-model="assignRemark"
+            type="textarea"
+            :rows="2"
+            :placeholder="$t('crm.inquirySources.assignRemarkPlaceholder')"
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showAssignDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button
+          type="primary"
+          :loading="assignLoading"
+          :disabled="!assignTargetId"
+          @click="confirmAssign"
+        >
+          {{ $t('crm.inquirySources.assign') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 批量导入对话框 -->
     <el-dialog
       v-model="showImportDialog"
@@ -198,7 +412,6 @@
           </div>
         </div>
       </div>
-      <!-- 导入结果 -->
       <div v-if="importResult" class="import-result">
         <el-alert
           :title="`${$t('crm.inquirySources.imported')}: ${importResult.imported} / ${$t('crm.inquirySources.updated')}: ${importResult.updated} / ${$t('crm.inquirySources.skipped')}: ${importResult.skipped}`"
@@ -226,12 +439,15 @@ import { ref, computed, onMounted, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, TableInstance } from 'element-plus'
-import { Connection, Plus, Upload, Download, Edit, Delete, Document } from '@element-plus/icons-vue'
-import { getCrmInquirySources, createCrmInquirySource, updateCrmInquirySource, deleteCrmInquirySource,
-  importCrmInquirySources, downloadInquirySourcesTemplate,
-  type CrmInquirySource } from '../../api/crm'
+import { Connection, List, Plus, Upload, Download, Edit, Delete, Document,
+  Refresh, Search, Promotion, Message, Phone } from '@element-plus/icons-vue'
+import { getCrmInquirySources, createCrmInquirySource, updateCrmInquirySource,
+  deleteCrmInquirySource, importCrmInquirySources, downloadInquirySourcesTemplate,
+  getCrmPendingLeads, assignCrmLead,
+  type CrmInquirySource, type CrmLead } from '../../api/crm'
 import { getEmployees } from '../../api/employees'
 import { useUserStore } from '../../store/user'
+import { CRM_COUNTRIES } from '../../utils/crm-countries'
 import type { WebsiteType } from '../../api/crm'
 
 const { t } = useI18n()
@@ -241,11 +457,19 @@ const isAdmin = computed(() => {
   return userStore.userInfo?.role === 'super_admin' || userStore.userInfo?.role === 'department_head'
 })
 
+const canAssign = computed(() => {
+  return userStore.hasPermission('crm.lead.assign') || userStore.userInfo?.role === 'super_admin'
+})
+
+// ==================== 子标签切换 ====================
+const activeSubTab = ref('config')
+
+// ==================== 来源配置 ====================
 const loading = ref(false)
 const saving = ref(false)
 const importing = ref(false)
 const sources = ref<CrmInquirySource[]>([])
-const salesUsers = ref<{ id: number; username: string; nickname: string }[]>([])
+const salesUsers = ref<{ id: number; username: string; nickname: string; department?: string }[]>([])
 const showDialog = ref(false)
 const showImportDialog = ref(false)
 const editingSource = ref<CrmInquirySource | null>(null)
@@ -264,6 +488,19 @@ const websiteTypes: Record<string, string> = {
   instagram: 'Instagram',
   other: '其他',
 }
+
+const leadSources = computed<Record<string, string>>(() => ({
+  official_website: t('crm.leads.sources.official_website'),
+  exhibition: t('crm.leads.sources.exhibition'),
+  referral: t('crm.leads.sources.referral'),
+  social_media: t('crm.leads.sources.social_media'),
+  cold_call: t('crm.leads.sources.cold_call'),
+  website: t('crm.leads.sources.website'),
+  partner: t('crm.leads.sources.partner'),
+  other: t('crm.leads.sources.other'),
+}))
+
+const countries = ref<string[]>(CRM_COUNTRIES)
 
 const form = ref({
   name: '',
@@ -295,7 +532,6 @@ const getOwnerName = (ownerId: number | null | undefined): string => {
 
 const formatDate = (d: string) => d ? new Date(d).toLocaleString('zh-CN') : '-'
 
-/** 兼容接口直接返回数组或 { data: [] } */
 function normalizeInquiryList(raw: unknown): CrmInquirySource[] {
   if (Array.isArray(raw)) return raw as CrmInquirySource[]
   if (raw && typeof raw === 'object' && Array.isArray((raw as { data?: unknown }).data)) {
@@ -324,7 +560,10 @@ const loadSalesUsers = async () => {
   try {
     const employees = await getEmployees()
     salesUsers.value = employees.map((e: any) => ({
-      id: e.id, username: e.username, nickname: e.nickname,
+      id: e.id,
+      username: e.username,
+      nickname: e.nickname,
+      department: e.department || '',
     }))
   } catch {}
 }
@@ -399,8 +638,6 @@ const handleDelete = async (row: CrmInquirySource) => {
   } catch (error: any) { if (error !== 'cancel') ElMessage.error(error.message || t('common.error')) }
 }
 
-onMounted(() => { loadSources(); loadSalesUsers() })
-
 const handleFileChange = (file: any) => {
   importFile.value = file.raw as File
 }
@@ -432,15 +669,138 @@ const handleImport = async () => {
   } catch (e: any) { ElMessage.error(e?.message || t('common.error')) }
   finally { importing.value = false }
 }
+
+// ==================== 待分配询盘 ====================
+const pendingLoading = ref(false)
+const pendingLeads = ref<CrmLead[]>([])
+const pendingTotal = ref(0)
+const pendingPage = ref(1)
+const pendingPageSize = ref(20)
+const pendingKeyword = ref('')
+const pendingSourceFilter = ref('')
+const pendingCountryFilter = ref('')
+const pendingStats = ref({ total: 0 })
+const showAssignDialog = ref(false)
+const assigningLead = ref<CrmLead | null>(null)
+const assignTargetId = ref<number | null>(null)
+const assignRemark = ref('')
+const assignLoading = ref(false)
+
+let debounceTimer: ReturnType<typeof setTimeout> | null = null
+const debounceLoadPending = () => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+  debounceTimer = setTimeout(() => {
+    pendingPage.value = 1
+    loadPendingLeads()
+  }, 400)
+}
+
+const loadPendingLeads = async () => {
+  if (!canAssign.value) return
+  pendingLoading.value = true
+  try {
+    const res = await getCrmPendingLeads({
+      page: pendingPage.value,
+      pageSize: pendingPageSize.value,
+      keyword: pendingKeyword.value || undefined,
+      source: pendingSourceFilter.value || undefined,
+      country: pendingCountryFilter.value || undefined,
+    })
+    pendingLeads.value = res.data
+    pendingTotal.value = res.total
+    pendingStats.value.total = res.total
+  } catch (error: any) {
+    pendingLeads.value = []
+    pendingTotal.value = 0
+    pendingStats.value.total = 0
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    pendingLoading.value = false
+  }
+}
+
+const getSourceLabel = (source: string | null | undefined): string => {
+  if (!source) return '-'
+  return leadSources.value[source] || source
+}
+
+const getPriorityType = (priority: string | null | undefined): string => {
+  const map: Record<string, string> = {
+    high: 'danger',
+    medium: 'warning',
+    low: 'info',
+  }
+  return map[priority || ''] || 'info'
+}
+
+const getPriorityLabel = (priority: string | null | undefined): string => {
+  const map: Record<string, string> = {
+    high: t('crm.leads.priorities.high'),
+    medium: t('crm.leads.priorities.medium'),
+    low: t('crm.leads.priorities.low'),
+  }
+  return map[priority || ''] || priority || '-'
+}
+
+const openAssignDialog = (lead: CrmLead) => {
+  assigningLead.value = lead
+  assignTargetId.value = null
+  assignRemark.value = ''
+  showAssignDialog.value = true
+}
+
+const confirmAssign = async () => {
+  if (!assigningLead.value || !assignTargetId.value) return
+  const targetUser = salesUsers.value.find(u => u.id === assignTargetId.value)
+  const targetName = targetUser?.nickname || targetUser?.username || `#${assignTargetId.value}`
+
+  try {
+    await ElMessageBox.confirm(
+      t('crm.inquirySources.assignConfirm', { name: targetName }),
+      t('common.warning'),
+      { type: 'warning' }
+    )
+  } catch {
+    return
+  }
+
+  assignLoading.value = true
+  try {
+    await assignCrmLead(assigningLead.value.id, assignTargetId.value)
+    ElMessage.success(t('crm.inquirySources.assignSuccess'))
+    showAssignDialog.value = false
+    assigningLead.value = null
+    loadPendingLeads()
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    assignLoading.value = false
+  }
+}
+
+onMounted(() => {
+  loadSources()
+  loadSalesUsers()
+})
 </script>
 
 <style scoped lang="scss">
 .inquiry-source-module {
+  .sub-tabs {
+    margin-bottom: 16px;
+    :deep(.el-radio-button__inner) {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tab-badge { margin-left: 4px; }
+  }
+
   .module-card {
     border-radius: 16px;
     border: 1px solid #e5e5e7;
     box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-    /* 避免父级裁剪导致 el-table 表体不可见 */
+
     :deep(.el-card__body) {
       overflow: visible;
     }
@@ -472,6 +832,7 @@ const handleImport = async () => {
           color: #1d1d1f;
           &.success { color: #67c23a; }
           &.info { color: #409eff; }
+          &.warning { color: #f56c6c; }
         }
         .stat-label {
           font-size: 12px;
@@ -489,6 +850,64 @@ const handleImport = async () => {
 
     .inquiry-source-table {
       margin-top: 4px;
+    }
+
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+  }
+
+  // 待分配询盘列表中的联系信息样式
+  :deep(.lead-contact) {
+    .contact-name {
+      font-weight: 600;
+      color: #1f2329;
+      font-size: 14px;
+    }
+    .contact-company {
+      font-size: 12px;
+      color: #64748b;
+      margin-top: 2px;
+    }
+    .contact-extra {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 4px;
+      font-size: 11px;
+      color: #86868b;
+      span {
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+      }
+    }
+  }
+
+  // 分配对话框
+  .assign-summary {
+    background: #f8f9fa;
+    border-radius: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    .assign-info-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      font-size: 13px;
+      .assign-info-label {
+        color: #86868b;
+        min-width: 70px;
+        flex-shrink: 0;
+      }
+      .assign-info-content {
+        color: #64748b;
+        word-break: break-word;
+      }
     }
   }
 
@@ -519,6 +938,7 @@ const handleImport = async () => {
       border-radius: 8px;
     }
   }
+
   .import-result {
     margin-top: 16px;
     .error-list {

@@ -821,11 +821,15 @@ import {
   FolderOpened,
   Collection,
   Download,
-  Tools
+  Tools,
+  Key,
+  Medal,
+  UserFilled,
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '../store/user'
 import { getProfile, getAvatarUrl, type UserProfile } from '../api/users'
+import { getDepartmentLabel, getPositionLabel } from '../utils/organization'
 import { getMyTodos, type Reminder } from '../api/reminders'
 import { getActiveAnnouncements, markAnnouncementAsRead, markAllAnnouncementsAsRead, type Announcement } from '../api/announcements'
 import { getExchangeRates, updateExchangeRatesBatch, type ExchangeRate, type UpdateExchangeRateDto } from '../api/exchange-rates'
@@ -871,7 +875,7 @@ const welcomeGreeting = computed(() => getTimeGreeting())
 // 欢迎鼓励语
 const encouragements = computed(() => {
   try {
-    const result = t('index.greetings.encouragement', { returnObjects: true })
+    const result = t('common.encouragement', { returnObjects: true })
     if (Array.isArray(result)) {
       return result as string[]
     }
@@ -964,6 +968,12 @@ const quickLinks = computed(() => {
 // 工作空间快捷入口卡片
 const workspaceShortcuts = computed(() => [
   {
+    key: 'employeeSelfService',
+    title: t('workspace.quickCards.employeeSelfService'),
+    desc: t('workspace.quickCards.employeeSelfServiceDesc'),
+    icon: UserFilled,
+  },
+  {
     key: 'companyFiles',
     title: t('workspace.quickCards.companyFiles'),
     desc: t('workspace.quickCards.companyFilesDesc'),
@@ -1003,8 +1013,11 @@ const handleWorkspaceShortcutClick = (key: string) => {
     router.push({ name: 'SoftwareDownloads' })
     return
   }
+  if (key === 'employeeSelfService') {
+    router.push({ name: 'SelfService' })
+    return
+  }
   if (key === 'tools') {
-    // 跳转到工作空间并请求打开工具区
     router.push({ name: 'Workspace', query: { open: 'tools' } })
   }
 }
@@ -2290,52 +2303,15 @@ const getStatusClass = (status?: string) => {
   return `status-${config.value}`
 }
 
-// 获取部门名称
+// 获取部门名称（使用共享配置，支持所有部门包括 general_office）
 const getDepartmentName = (dept: string) => {
-  const deptMap: Record<string, { zh: string; en: string }> = {
-    planning: { zh: '品牌管理中心', en: 'Brand Management Center' },
-    sales: { zh: '销售部', en: 'Sales' },
-    tech: { zh: '技术部', en: 'Tech' },
-    finance: { zh: '财务部', en: 'Finance' },
-    hr: { zh: '人力资源部', en: 'Human Resources' },
-    domestic: { zh: '内贸部', en: 'Domestic' },
-    management: { zh: '总经办', en: 'Management' },
-  }
-  const deptInfo = deptMap[dept]
-  if (!deptInfo) return dept
-  return locale.value === 'en-US' ? deptInfo.en : deptInfo.zh
+  return getDepartmentLabel(dept, locale.value === 'en-US' ? 'en' : 'zh')
 }
 
-// 获取职位名称：支持职位编码 -> 多语言名称，兼容旧数据直接显示
+// 获取职位名称（使用共享配置，支持所有职位编码）
 const getPositionName = (position?: string | null): string => {
   if (!position) return ''
-  const positionMap: Record<string, { zh: string; en: string }> = {
-    recruitment_specialist: { zh: '招聘专员', en: 'Recruitment Specialist' },
-    admin_specialist: { zh: '行政专员', en: 'Administrative Specialist' },
-    front_desk_receptionist: { zh: '行政前台', en: 'Front Desk Receptionist' },
-    director: { zh: '总监', en: 'Director' },
-    sales: { zh: '销售', en: 'Sales' },
-    supervisor: { zh: '主管', en: 'Supervisor' },
-    graphic_designer: { zh: '平面设计师', en: 'Graphic Designer' },
-    design_assistant: { zh: '设计助理', en: 'Design Assistant' },
-    frontend_engineer: { zh: '前端开发工程师', en: 'Front-end Developer' },
-    after_sales_engineer: { zh: '售后工程师', en: 'After-sales Engineer' },
-    quality_specialist: { zh: '品质', en: 'Quality Specialist' },
-    purchasing_specialist: { zh: '采购', en: 'Purchasing Specialist' },
-    accountant_cashier: { zh: '会计出纳', en: 'Accountant & Cashier' },
-    finance_specialist: { zh: '财务专员', en: 'Finance Specialist' },
-    ceo: { zh: 'CEO', en: 'CEO' },
-    chairman: { zh: '董事长', en: 'Chairman' },
-    deputy_general_manager: { zh: '副总经理', en: 'Deputy General Manager' },
-    special_shape_bu_gm: { zh: '异形事业部总经理', en: 'GM of Special-shaped Business Unit' },
-    new_media_operator: { zh: '新媒体运营', en: 'New Media Operator' },
-    copywriter: { zh: '文案专员', en: 'Copywriter' },
-    modeling_3d_artist: { zh: '3D建模渲染师', en: '3D Modeling & Rendering Artist' },
-    merchandiser: { zh: '跟单', en: 'Merchandiser' },
-  }
-  const info = positionMap[position]
-  if (!info) return position
-  return locale.value === 'en-US' ? info.en : info.zh
+  return getPositionLabel(position, locale.value === 'en-US' ? 'en' : 'zh')
 }
 
 onMounted(async () => {
@@ -2578,6 +2554,9 @@ onBeforeUnmount(() => {
               .el-icon {
                 font-size: 14px;
                 color: #409eff;
+              }
+
+              &.role-admin {
               }
             }
           }
@@ -2952,6 +2931,10 @@ onBeforeUnmount(() => {
             align-items: center;
             justify-content: center;
             color: #ffffff;
+
+            &.employeeSelfService {
+              background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            }
 
             &.companyFiles {
               background: linear-gradient(135deg, #2563eb 0%, #4f46e5 100%);

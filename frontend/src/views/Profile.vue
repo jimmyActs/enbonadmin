@@ -126,19 +126,31 @@
               </el-button>
             </el-form-item>
 
-            <!-- 修改后台登录密码 -->
-            <el-divider>{{ $t('profile.changePassword') }}</el-divider>
-            <div style="position: relative; min-height: 200px;">
-              <div v-if="!showPasswordForm" style="text-align: right;">
-                <el-button type="primary" @click="showPasswordForm = true">
-                  {{ $t('profile.changePassword') }}
-                </el-button>
-              </div>
-              <el-form 
-                v-else
-                :model="passwordForm" 
-                :rules="passwordRules" 
-                ref="passwordFormRef" 
+            <!-- 修改密码 + 账号设置（同一区域） -->
+            <el-divider content-position="left">
+              <span class="section-divider-title">
+                {{ $t('profile.changePassword') }} & {{ $t('profile.accountSettings') }}
+              </span>
+            </el-divider>
+
+            <!-- 按钮入口（同一行） -->
+            <div class="inline-section-buttons" v-if="!showPasswordForm && !showAccountSettingsForm">
+              <el-button type="primary" @click="showPasswordForm = true">
+                <el-icon><Lock /></el-icon>
+                {{ $t('profile.changePassword') }}
+              </el-button>
+              <el-button type="primary" @click="showAccountSettingsForm = true">
+                <el-icon><Setting /></el-icon>
+                {{ $t('profile.accountSettings') }}
+              </el-button>
+            </div>
+
+            <!-- 修改密码表单 -->
+            <div v-if="showPasswordForm" class="inline-form-section">
+              <el-form
+                :model="passwordForm"
+                :rules="passwordRules"
+                ref="passwordFormRef"
                 label-width="120px"
               >
                 <el-form-item :label="$t('profile.oldPassword')" prop="oldPassword">
@@ -172,6 +184,63 @@
                     </el-button>
                     <el-button type="primary" @click="handleChangePassword" :loading="changingPassword">
                       {{ $t('profile.changePassword') }}
+                    </el-button>
+                  </div>
+                </el-form-item>
+              </el-form>
+            </div>
+
+            <!-- 账号设置表单 -->
+            <div v-if="showAccountSettingsForm" class="inline-form-section">
+              <el-form
+                :model="accountSettingsForm"
+                :rules="accountSettingsRules"
+                ref="accountSettingsFormRef"
+                label-width="140px"
+              >
+                <el-form-item :label="$t('profile.loginUsername')" prop="loginUsername">
+                  <el-input
+                    v-model="accountSettingsForm.loginUsername"
+                    :placeholder="$t('profile.loginUsernamePlaceholder')"
+                    clearable
+                    style="width: 300px;"
+                  >
+                    <template #append>
+                      <el-button @click="checkLoginUsername" :loading="checkingLoginUsername">
+                        {{ $t('profile.check') }}
+                      </el-button>
+                    </template>
+                  </el-input>
+                  <div v-if="loginUsernameCheckResult !== null" style="margin-top: 4px; font-size: 12px;">
+                    <span v-if="loginUsernameCheckResult" style="color: #67c23a;">{{ $t('profile.usernameAvailable') }}</span>
+                    <span v-else style="color: #f56c6c;">{{ $t('profile.usernameTaken') }}</span>
+                  </div>
+                </el-form-item>
+                <el-form-item :label="$t('profile.phone')" prop="phone">
+                  <el-input
+                    v-model="accountSettingsForm.phone"
+                    :placeholder="$t('profile.phonePlaceholder')"
+                    clearable
+                    style="width: 300px;"
+                  >
+                    <template #append>
+                      <el-button @click="checkPhone" :loading="checkingPhone">
+                        {{ $t('profile.check') }}
+                      </el-button>
+                    </template>
+                  </el-input>
+                  <div v-if="phoneCheckResult !== null" style="margin-top: 4px; font-size: 12px;">
+                    <span v-if="phoneCheckResult" style="color: #67c23a;">{{ $t('profile.phoneAvailable') }}</span>
+                    <span v-else style="color: #f56c6c;">{{ $t('profile.phoneTaken') }}</span>
+                  </div>
+                </el-form-item>
+                <el-form-item>
+                  <div style="text-align: right;">
+                    <el-button @click="handleCancelAccountSettings" style="margin-right: 12px;">
+                      {{ $t('common.cancel') }}
+                    </el-button>
+                    <el-button type="primary" @click="handleSaveAccountSettings" :loading="savingAccountSettings">
+                      {{ $t('common.save') }}
                     </el-button>
                   </div>
                 </el-form-item>
@@ -292,8 +361,8 @@ import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { Plus, Location, CircleCheck, CircleClose, VideoCamera, Promotion, Sunny, SwitchButton } from '@element-plus/icons-vue'
-import { getProfile, updateProfile, uploadAvatar, getAvatarUrl, changePassword, type UserProfile } from '../api/users'
+import { Plus, Location, CircleCheck, CircleClose, VideoCamera, Promotion, Sunny, SwitchButton, Lock, Setting } from '@element-plus/icons-vue'
+import { getProfile, updateProfile, uploadAvatar, getAvatarUrl, changePassword, updateLoginUsername, updatePhone, checkLoginUsername as checkLoginUsernameApi, checkPhone as checkPhoneApi, type UserProfile } from '../api/users'
 
 const { t } = useI18n()
 
@@ -345,6 +414,33 @@ const saving = ref(false)
 const changingPassword = ref(false)
 const passwordFormRef = ref<FormInstance>()
 const showPasswordForm = ref(false)
+
+// 账号设置表单（登录用户名和手机号）
+const showAccountSettingsForm = ref(false)
+const accountSettingsFormRef = ref<FormInstance>()
+const accountSettingsForm = ref({
+  loginUsername: '',
+  phone: '',
+})
+const accountSettingsRules: FormRules = {
+  loginUsername: [
+    { required: true, message: t('profile.loginUsernameRequired'), trigger: 'blur' },
+    { min: 3, max: 30, message: t('profile.loginUsernameLength'), trigger: 'blur' },
+  ],
+  phone: [
+    { required: true, message: t('profile.phoneRequired'), trigger: 'blur' },
+    {
+      pattern: /^1[3-9]\d{9}$/,
+      message: t('profile.phoneInvalid'),
+      trigger: 'blur',
+    },
+  ],
+}
+const checkingLoginUsername = ref(false)
+const checkingPhone = ref(false)
+const loginUsernameCheckResult = ref<boolean | null>(null)
+const phoneCheckResult = ref<boolean | null>(null)
+const savingAccountSettings = ref(false)
 
 // 工作状态选择（基础状态，不含目的地）
 const selectedWorkStatus = ref<string>('available')
@@ -470,12 +566,12 @@ const loadProfile = async () => {
   try {
     const data = await getProfile()
     profile.value = data
-    
+
     // 解析工作状态
     const { baseStatus, destination } = parseWorkStatus(data.workStatus)
     selectedWorkStatus.value = baseStatus
     awayDestination.value = destination
-    
+
     formData.value = {
       workStatus: data.workStatus || 'available',
       mood: data.mood || '',
@@ -483,6 +579,12 @@ const loadProfile = async () => {
       englishName: data.englishName || '',
       country: data.country || '',
       city: data.city || '',
+    }
+
+    // 初始化账号设置表单
+    accountSettingsForm.value = {
+      loginUsername: data.loginUsername || '',
+      phone: data.phone || '',
     }
   } catch (error: any) {
     ElMessage.error(error.message || t('common.error'))
@@ -589,6 +691,90 @@ const handleCancelPasswordChange = () => {
   showPasswordForm.value = false
 }
 
+// 账号设置相关函数
+const handleCancelAccountSettings = () => {
+  accountSettingsFormRef.value?.resetFields()
+  showAccountSettingsForm.value = false
+  loginUsernameCheckResult.value = null
+  phoneCheckResult.value = null
+}
+
+const checkLoginUsername = async () => {
+  if (!accountSettingsForm.value.loginUsername) {
+    ElMessage.warning(t('profile.loginUsernameRequired'))
+    return
+  }
+  checkingLoginUsername.value = true
+  try {
+    const res = await checkLoginUsernameApi(accountSettingsForm.value.loginUsername)
+    loginUsernameCheckResult.value = res.available
+    if (res.available) {
+      ElMessage.success(t('profile.usernameAvailable'))
+    } else {
+      ElMessage.warning(t('profile.usernameTaken'))
+    }
+  } catch {
+    loginUsernameCheckResult.value = null
+  } finally {
+    checkingLoginUsername.value = false
+  }
+}
+
+const checkPhone = async () => {
+  if (!accountSettingsForm.value.phone) {
+    ElMessage.warning(t('profile.phoneRequired'))
+    return
+  }
+  const phoneRegex = /^1[3-9]\d{9}$/
+  if (!phoneRegex.test(accountSettingsForm.value.phone)) {
+    ElMessage.warning(t('profile.phoneInvalid'))
+    return
+  }
+  checkingPhone.value = true
+  try {
+    const res = await checkPhoneApi(accountSettingsForm.value.phone)
+    phoneCheckResult.value = res.available
+    if (res.available) {
+      ElMessage.success(t('profile.phoneAvailable'))
+    } else {
+      ElMessage.warning(t('profile.phoneTaken'))
+    }
+  } catch {
+    phoneCheckResult.value = null
+  } finally {
+    checkingPhone.value = false
+  }
+}
+
+const handleSaveAccountSettings = async () => {
+  try {
+    await accountSettingsFormRef.value?.validate()
+  } catch {
+    return
+  }
+
+  savingAccountSettings.value = true
+  try {
+    // 如果有填写登录用户名，尝试更新
+    if (accountSettingsForm.value.loginUsername) {
+      await updateLoginUsername({ loginUsername: accountSettingsForm.value.loginUsername })
+    }
+
+    // 如果有填写手机号，尝试更新
+    if (accountSettingsForm.value.phone) {
+      await updatePhone({ phone: accountSettingsForm.value.phone })
+    }
+
+    ElMessage.success(t('profile.accountSettingsSuccess'))
+    await loadProfile()
+    handleCancelAccountSettings()
+  } catch (error: any) {
+    ElMessage.error(error.message || t('profile.accountSettingsError'))
+  } finally {
+    savingAccountSettings.value = false
+  }
+}
+
 onMounted(() => {
   loadProfile()
 })
@@ -597,6 +783,41 @@ onMounted(() => {
 <style scoped lang="scss">
 .profile-container {
   padding: 20px;
+
+  // 修改密码和账号设置按钮同一行样式
+  .inline-section-buttons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+
+    .el-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+
+      .el-icon {
+        font-size: 14px;
+      }
+    }
+  }
+
+  // 表单区域样式
+  .inline-form-section {
+    padding: 16px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 1px solid #e5e5e7;
+    margin-bottom: 16px;
+  }
+
+  // 分隔线标题
+  :deep(.el-divider) {
+    .section-divider-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #606266;
+    }
+  }
 
   .avatar-section {
     text-align: center;
@@ -760,5 +981,7 @@ onMounted(() => {
     }
   }
 }
+
+// 员工自助服务卡片样式（已迁移到 SelfService.vue）
 </style>
 

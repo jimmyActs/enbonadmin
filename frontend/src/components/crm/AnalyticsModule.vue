@@ -42,7 +42,7 @@
           <div class="chart-card">
             <div class="chart-title">{{ $t('crm.analytics.channelConversionTable') }}</div>
             <p class="chart-desc">{{ $t('crm.analytics.channelConversionTableDesc') }}</p>
-            <el-table :data="channelData" stripe size="small" class="channel-table" v-loading="loadingChannel">
+            <el-table :data="channelData" stripe size="small" class="channel-table full-width-table" v-loading="loadingChannel">
               <el-table-column :label="$t('crm.analytics.channel')" min-width="100">
                 <template #default="{ row }">
                   <div class="channel-cell">
@@ -109,7 +109,7 @@
           <div class="chart-card">
             <div class="chart-title">{{ $t('crm.analytics.websiteDetail') }}</div>
             <p class="chart-desc">{{ $t('crm.analytics.websiteDetailDesc') }}</p>
-            <el-table :data="websiteData" stripe size="small" class="channel-table" v-loading="loadingWebsite">
+            <el-table :data="websiteData" stripe size="small" class="channel-table full-width-table" v-loading="loadingWebsite">
               <el-table-column :label="$t('crm.analytics.website')" min-width="160">
                 <template #default="{ row }">
                   <div class="channel-cell">
@@ -541,6 +541,9 @@ onMounted(() => { loadAll() })
   }
 
   .channel-table {
+    &.full-width-table {
+      width: 100% !important;
+    }
     .channel-cell {
       display: flex;
       align-items: center;

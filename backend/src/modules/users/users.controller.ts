@@ -13,6 +13,7 @@ import {
   MaxFileSizeValidator,
   UnauthorizedException,
   BadRequestException,
+  ConflictException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { JwtService } from '@nestjs/jwt';
@@ -104,6 +105,152 @@ export class UsersController {
     const updatedUser = await this.usersService.update(user.id, updateData);
     const { password, ...userWithoutPassword } = updatedUser;
     return userWithoutPassword;
+  }
+
+  /**
+   * 修改登录用户名
+   * 用户可以修改自己的登录用户名（不影响系统内显示名）
+   */
+  @Put('profile/login-username')
+  async updateLoginUsername(
+    @Req() req: any,
+    @Body() body: { loginUsername: string },
+  ) {
+    const currentUser = await this.getUserFromRequest(req);
+    if (!currentUser) {
+      throw new UnauthorizedException('未登录');
+    }
+
+    const { loginUsername } = body;
+
+    if (!loginUsername || loginUsername.trim() === '') {
+      throw new BadRequestException('登录用户名不能为空');
+    }
+
+    // 验证唯一性
+    const isUnique = await this.usersService.checkLoginUsernameUnique(
+      loginUsername.trim(),
+      currentUser.id,
+    );
+    if (!isUnique) {
+      throw new ConflictException('该登录用户名已被使用');
+    }
+
+    // 不能与原 username 重复
+    if (loginUsername.trim() === currentUser.username) {
+      throw new BadRequestException('不能与原登录名相同');
+    }
+
+    const updatedUser = await this.usersService.update(currentUser.id, {
+      loginUsername: loginUsername.trim(),
+    });
+
+    return {
+      success: true,
+      message: '登录用户名修改成功',
+      loginUsername: updatedUser.loginUsername,
+    };
+  }
+
+  /**
+   * 修改绑定手机号
+   * 用户可以修改自己的手机号
+   */
+  @Put('profile/phone')
+  async updatePhone(
+    @Req() req: any,
+    @Body() body: { phone: string },
+  ) {
+    const currentUser = await this.getUserFromRequest(req);
+    if (!currentUser) {
+      throw new UnauthorizedException('未登录');
+    }
+
+    const { phone } = body;
+
+    if (!phone || phone.trim() === '') {
+      throw new BadRequestException('手机号不能为空');
+    }
+
+    // 简单验证手机号格式
+    const phoneRegex = /^1[3-9]\d{9}$/;
+    if (!phoneRegex.test(phone.trim())) {
+      throw new BadRequestException('请输入有效的手机号');
+    }
+
+    // 验证唯一性
+    const isUnique = await this.usersService.checkPhoneUnique(
+      phone.trim(),
+      currentUser.id,
+    );
+    if (!isUnique) {
+      throw new ConflictException('该手机号已被其他账号绑定');
+    }
+
+    const updatedUser = await this.usersService.update(currentUser.id, {
+      phone: phone.trim(),
+    });
+
+    return {
+      success: true,
+      message: '手机号修改成功',
+      phone: updatedUser.phone,
+    };
+  }
+
+  /**
+   * 修改密码
+   */
+  @Put('profile/password')
+  async updatePassword(
+    @Req() req: any,
+    @Body() body: { oldPassword: string; newPassword: string },
+  ) {
+    const currentUser = await this.getUserFromRequest(req);
+    if (!currentUser) {
+      throw new UnauthorizedException('未登录');
+    }
+
+    const { oldPassword, newPassword } = body;
+
+    if (!oldPassword || !newPassword) {
+      throw new BadRequestException('请填写完整信息');
+    }
+
+    if (newPassword.length < 6) {
+      throw new BadRequestException('新密码至少6位');
+    }
+
+    // 验证旧密码
+    const isValid = await this.usersService.validatePassword(
+      oldPassword,
+      currentUser.password,
+    );
+    if (!isValid) {
+      throw new BadRequestException('原密码错误');
+    }
+
+    await this.usersService.update(currentUser.id, { password: newPassword });
+
+    return { success: true, message: '密码修改成功' };
+  }
+
+  /**
+   * 检查登录用户名是否可用
+   */
+  @Get('check-login-username/:username')
+  async checkLoginUsername(@Param('username') username: string) {
+    const isUnique = await this.usersService.checkLoginUsernameUnique(username);
+    return { available: isUnique };
+  }
+
+  /**
+   * 检查手机号是否可用
+   */
+  @Get('check-phone/:phone')
+  async checkPhone(@Param('phone') phone: string) {
+    const isUnique = await this.usersService.checkPhoneUnique(phone);
+    return { available: isUnique };
   }
 
   /**

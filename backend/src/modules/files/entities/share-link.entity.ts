@@ -15,7 +15,7 @@ export class ShareLink {
   @Column({ unique: true })
   token: string;
 
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   expiresAt: Date | null;
 
   @Column()

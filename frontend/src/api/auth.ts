@@ -14,9 +14,20 @@ export interface LoginResponse {
     nickname: string;
     role: string;
     department: string | null;
+    position: string | null;
     email: string;
     /** 权限码列表，如 ['hr.payroll.view', 'hr.payroll.edit'] */
     permissions?: string[];
+    /** 是否超级管理员 */
+    isSuperAdmin?: boolean;
+    /** 可见模块列表 */
+    visibleModules?: string[];
+    /** 数据范围映射 */
+    dataScopes?: Record<string, string>;
+    /** 岗位编码 */
+    positionCode?: string | null;
+    /** 部门编码 */
+    departmentCode?: string | null;
   };
 }
 

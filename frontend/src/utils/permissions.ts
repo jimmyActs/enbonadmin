@@ -1,6 +1,24 @@
 /**
  * 权限管理工具函数
- * 统一管理前端权限检查逻辑
+ * 
+ * ⚠️ 警告：此文件已弃用！
+ * 
+ * 本文件中的函数使用硬编码的角色检查（如 UserRole.SUPER_ADMIN, UserRole.HR_DIRECTOR 等），
+ * 这是旧系统的做法，已不再推荐使用。
+ * 
+ * 新的权限系统基于后端 PermissionEngineService：
+ * - visibleModules：由后端根据用户所属部门（departmentCode）计算
+ * - permissions：由后端根据用户岗位（positionCode）计算
+ * - dataScopes：数据范围（SELF/DEPARTMENT/ORG）
+ * 
+ * 前端应该使用 userStore 的方法：
+ * - userStore.canAccessModule('crm')     → 检查模块可见性
+ * - userStore.hasPermission('code')      → 检查权限码
+ * - userStore.hasAnyPermission(codes)    → 任一权限码检查
+ * - userStore.canAccessModuleData('crm') → 检查数据范围
+ * 
+ * 此文件仅保留用于兼容旧代码，后续会逐步移除。
+ * @deprecated 请使用 useUserStore 的权限方法
  */
 
 export enum UserRole {
@@ -48,8 +66,8 @@ export function canPublishAnnouncement(userInfo: UserInfo | null): boolean {
   // 行政总监和行政前台可以发布
   if (role === UserRole.HR_DIRECTOR || role === UserRole.HR_RECEPTION) return true;
   
-  // 兼容旧数据：行政部且职位为前台或总监
-  if (role === UserRole.HR && userInfo.department === 'hr') {
+  // 兼容旧数据：人力资源中心
+  if (role === UserRole.HR && userInfo.department === 'hr_center') {
     const position = (userInfo.position || '').toLowerCase();
     return (
       position.includes('前台') ||
@@ -83,8 +101,10 @@ export function canAccessFinance(userInfo: UserInfo | null): boolean {
 export function canAccessCRM(userInfo: UserInfo | null): boolean {
   if (!userInfo) return false;
   const role = userInfo.role;
-  // 当前阶段：小满CRM 模块仅对超级管理员开放，其他角色一律不可见/不可访问
-  return role === UserRole.SUPER_ADMIN;
+  // 超级管理员可以访问
+  if (role === UserRole.SUPER_ADMIN) return true;
+  // 其他角色通过 visibleModules 控制（由后端返回）
+  return false;
 }
 
 /**
@@ -104,39 +124,44 @@ export function canAccessSales(userInfo: UserInfo | null): boolean {
   if (!userInfo) return false;
   const role = userInfo.role;
   const department = userInfo.department;
-  
+
   // 超级管理员、部门领导可以访问
   if (role === UserRole.SUPER_ADMIN || role === UserRole.DEPARTMENT_HEAD) {
     return true;
   }
-  
-  // 销售部门人员可以访问
-  if (department === 'sales') {
+
+  // 销售运营中心人员可以访问
+  if (department === 'sales_ops') {
     return true;
   }
-  
+
   return false;
 }
 
 /**
- * 检查是否可以访问人事行政
- * 只有行政部（department === 'hr'）的同事才能看到
+ * 检查是否可以访问人力资源部
+ * 只有人力资源中心（department === 'hr_center'）或者 hr_director 角色的同事才能看到
  */
 export function canAccessHR(userInfo: UserInfo | null): boolean {
   if (!userInfo) return false;
   const role = userInfo.role;
   const department = userInfo.department;
-  
+
   // 超级管理员可以访问
   if (role === UserRole.SUPER_ADMIN) {
     return true;
   }
-  
-  // 只有行政部（department === 'hr'）的同事才能访问
-  if (department === 'hr') {
+
+  // HR总监角色可以访问
+  if (role === UserRole.HR_DIRECTOR) {
     return true;
   }
-  
+
+  // 人力资源中心部门的同事可以访问
+  if (department === 'hr_center') {
+    return true;
+  }
+
   return false;
 }
 
@@ -225,7 +250,7 @@ export function canAccessWorkspaceModule(module: WorkspaceModule, userInfo: User
       role === UserRole.SUPER_ADMIN ||
       role === UserRole.DEPARTMENT_HEAD ||
       role === UserRole.EMPLOYEE ||
-      (userInfo.department === 'sales')
+      (userInfo.department === 'sales_ops')
     );
   }
   

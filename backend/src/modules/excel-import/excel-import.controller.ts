@@ -64,7 +64,10 @@ export class ExcelImportController {
     @UploadedFile() file: Express.Multer.File,
     @Req() req: any,
   ) {
+    console.log('[import] req.headers.authorization:', req.headers.authorization?.substring(0, 50));
+    console.log('[import] file:', file ? `${file.originalname} (${file.size}b)` : 'NULL');
     const user = await this.getUserFromRequest(req);
+    console.log('[import] user:', user?.id, user?.username);
     if (!user) return { message: '未登录' };
 
     const result = await this.excelImportService.importHrEmployees(file?.buffer, file?.originalname, user.id, user.nickname || user.username);

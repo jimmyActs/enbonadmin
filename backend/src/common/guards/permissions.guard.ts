@@ -60,8 +60,26 @@ export class PermissionsGuard implements CanActivate {
 
     const userPermissions = userContext.permissions || [];
 
+    /**
+     * 检查用户是否拥有某个权限（支持通配符）
+     * - '*' 匹配所有
+     * - 'hr.*' 匹配 'hr.recruitment.board.view', 'hr.attendance.view' 等
+     * - 'crm.*' 匹配 'crm.customer.view' 等
+     */
+    const hasPermission = (userPerms: string[], required: string): boolean => {
+      return userPerms.some((up) => {
+        if (up === '*') return true;
+        if (up === required) return true;
+        if (up.endsWith('.*')) {
+          const prefix = up.slice(0, -2);
+          return required.startsWith(prefix + '.') || required === prefix;
+        }
+        return false;
+      });
+    };
+
     const hasAllPermissions = requiredPermissions.every((perm) =>
-      userPermissions.includes(perm),
+      hasPermission(userPermissions, perm),
     );
 
     if (!hasAllPermissions) {

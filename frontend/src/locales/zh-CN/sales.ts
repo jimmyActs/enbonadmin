@@ -7,6 +7,8 @@ export default {
     targets: '目标制定',
     review: '复盘',
     quotation: '报价单',
+    shipments: '出货文件',
+    email: '邮件往来',
   },
   customers: {
     title: '客户记录',
@@ -64,6 +66,8 @@ export default {
     title: '目标制定',
     addTarget: '添加目标',
     editTarget: '编辑目标',
+    salesName: '业务员',
+    salesNamePlaceholder: '选择业务员',
     period: '周期',
     periodPlaceholder: '选择目标周期',
     periodDate: '时间段',

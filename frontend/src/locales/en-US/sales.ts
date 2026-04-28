@@ -7,6 +7,8 @@ export default {
     targets: 'Targets',
     review: 'Review',
     quotation: 'Quotation',
+    shipments: 'Shipments',
+    email: 'Email',
   },
   customers: {
     title: 'Customer Records',
@@ -64,6 +66,8 @@ export default {
     title: 'Target Setting',
     addTarget: 'Add Target',
     editTarget: 'Edit Target',
+    salesName: 'Salesperson',
+    salesNamePlaceholder: 'Select salesperson',
     period: 'Period',
     periodPlaceholder: 'Select target period',
     periodDate: 'Date Range',

@@ -16,6 +16,9 @@ export class CrmQuotation {
   @Column({ unique: true })
   quotationNumber: string; // 报价单号
 
+  @Column({ nullable: true })
+  customerId: number; // 关联客户ID（外键，可选）
+
   @Column()
   customerName: string;
 
@@ -45,6 +48,9 @@ export class CrmQuotation {
 
   @Column({ type: 'integer', nullable: true })
   createdBy: number;
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
 
   @CreateDateColumn()
   createdAt: Date;

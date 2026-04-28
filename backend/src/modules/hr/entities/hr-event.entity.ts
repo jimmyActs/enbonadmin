@@ -44,6 +44,9 @@ export class HrEvent {
   @Column({ nullable: true })
   createdBy: number;
 
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
+
   @CreateDateColumn()
   createdAt: Date;
 

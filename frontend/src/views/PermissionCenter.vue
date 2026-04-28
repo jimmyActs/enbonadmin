@@ -117,19 +117,19 @@
 
           <div class="drive-admin">
             <el-table :data="driveConfigs" style="width: 100%" size="small">
-              <el-table-column prop="id" label="盘符" width="80" />
-              <el-table-column prop="name" label="系统名称" width="120" />
+              <el-table-column prop="id" :label="t('common.driveLetter')" width="80" />
+              <el-table-column prop="name" :label="t('common.systemName')" width="120" />
               <el-table-column prop="displayName" :label="t('files.driveName')" min-width="200">
                 <template #default="{ row }">
                   <el-input v-model="row.displayName" size="small" />
                 </template>
               </el-table-column>
-              <el-table-column prop="enabled" label="启用" width="120" align="center">
+              <el-table-column prop="enabled" :label="t('common.enabled')" width="120" align="center">
                 <template #default="{ row }">
                   <el-switch v-model="row.enabled" />
                 </template>
               </el-table-column>
-              <el-table-column prop="enableQuotaScan" label="开启容量扫描" width="140" align="center">
+              <el-table-column prop="enableQuotaScan" :label="t('common.enableQuotaScan')" width="140" align="center">
                 <template #default="{ row }">
                   <el-switch v-model="row.enableQuotaScan" />
                 </template>
@@ -148,9 +148,9 @@
 
             <!-- 工作空间模块存储配置 -->
             <div class="workspace-storage">
-              <h4 class="section-title">工作空间存储配置</h4>
+              <h4 class="section-title">{{ t('common.workspaceStorageConfig') }}</h4>
               <el-table :data="workspaceStorageRows" size="small" style="width: 100%">
-                <el-table-column prop="moduleKey" label="模块" width="140">
+                <el-table-column prop="moduleKey" :label="t('common.module')" width="140">
                   <template #default="{ row }">
                     {{ row.label }}
                   </template>
@@ -167,15 +167,13 @@
                     </el-select>
                   </template>
                 </el-table-column>
-                <el-table-column prop="rootPath" label="根目录（文件夹）" min-width="220">
+                <el-table-column prop="rootPath" :label="t('common.rootDirectory')" min-width="220">
                   <template #default="{ row }">
                     <el-input v-model="row.rootPath" size="small" placeholder="例如 company-files / software-downloads" />
                   </template>
                 </el-table-column>
               </el-table>
-              <p class="drive-admin-tip">
-                这里决定“工作空间”里各大板块在服务器硬盘上的实际存储位置，修改后保存即可生效，无需改代码。
-              </p>
+              <p class="drive-admin-tip">{{ t('common.workspaceStorageTip') || '这里决定“工作空间”里各大板块在服务器硬盘上的实际存储位置，修改后保存即可生效，无需改代码。' }}</p>
             </div>
           </div>
         </el-card>
@@ -186,13 +184,13 @@
 
 <script setup lang="ts">
 import { onMounted, ref, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from 'vue-i18n'
 import { getEmployees, type Employee } from '../api/employees'
-import { 
-  getAllRoles, 
-  getUserRoles, 
-  assignRolesToUser, 
+import {
+  getAllRoles,
+  getUserRoles,
+  assignRolesToUser,
   getUserPermissions,
   getAllPermissions,
   type PermissionRole,
@@ -229,7 +227,7 @@ const workspaceConfigs = ref<WorkspaceStorageConfig[]>([])
 type WorkspaceStorageRow = WorkspaceStorageConfig & { label: string }
 const workspaceStorageRows = ref<WorkspaceStorageRow[]>([])
 
-const isSuperAdmin = computed(() => userStore.userInfo?.role === 'super_admin')
+const isSuperAdmin = computed(() => userStore.isSuperAdmin)
 
 // 部门名称映射
 const departmentsMap = computed(() => ({
@@ -314,9 +312,26 @@ const handleSave = async () => {
   }
 
   try {
+    await ElMessageBox.confirm(
+      `${t('common.confirm')}${t('common.save')}${currentUser.value.nickname || currentUser.value.username}${t('permissions.confirmRoleAssignment') || ' 的角色分配吗？'}`,
+      t('permissions.confirmRoleAssignmentTitle') || '确认保存角色分配',
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' },
+    )
+  } catch {
+    return
+  }
+
+  try {
     saving.value = true
     await assignRolesToUser(currentUser.value.id, selectedRoleIds.value)
-    ElMessage.success(t('common.updateSuccess'))
+
+    // 如果是修改自己的权限分配，刷新当前用户的权限上下文（避免重新登录）
+    if (userStore.userInfo?.id === currentUser.value.id) {
+      await userStore.refreshPermissions()
+      ElMessage.success(t('permissions.assignSuccess') || t('common.updateSuccess'))
+    } else {
+      ElMessage.success(t('common.updateSuccess'))
+    }
 
     // 角色变更后刷新权限清单
     const permRes = await getUserPermissions(currentUser.value.id)
@@ -376,6 +391,16 @@ onMounted(() => {
 
 // 保存存储盘配置
 const handleSaveDrives = async () => {
+  try {
+    await ElMessageBox.confirm(
+      t('permissions.confirmSaveDrivesMsg') || '确定要保存存储盘和工作空间配置吗？',
+      t('permissions.confirmSaveDrivesTitle') || '确认保存配置',
+      { confirmButtonText: t('common.confirm'), cancelButtonText: t('common.cancel'), type: 'warning' },
+    )
+  } catch {
+    return
+  }
+
   try {
     savingDrives.value = true
     await updateAdminDrives(driveConfigs.value)

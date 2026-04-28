@@ -3,13 +3,14 @@ import api, { getApiBaseURL } from './config';
 export interface UserProfile {
   id: number;
   username: string;
+  loginUsername?: string; // 独立登录用户名
   nickname: string;
   chineseName?: string;
   englishName?: string;
   country?: string;
   city?: string;
   email?: string;
-  phone?: string;
+  phone?: string; // 手机号（可用于登录）
   role: string;
   department?: string;
   avatar?: string;
@@ -42,6 +43,14 @@ export interface UpdateProfileDto {
 export interface ChangePasswordDto {
   oldPassword: string;
   newPassword: string;
+}
+
+export interface UpdateLoginUsernameDto {
+  loginUsername: string;
+}
+
+export interface UpdatePhoneDto {
+  phone: string;
 }
 
 // 获取当前用户信息
@@ -85,7 +94,27 @@ export const getAvatarUrl = (avatarPath?: string): string => {
 };
 
 // 修改密码
-export const changePassword = (data: ChangePasswordDto): Promise<void> => {
-  return api.put('/users/change-password', data);
+export const changePassword = (data: ChangePasswordDto): Promise<{ success: boolean; message: string }> => {
+  return api.put('/users/profile/password', data);
+};
+
+// 修改登录用户名
+export const updateLoginUsername = (data: UpdateLoginUsernameDto): Promise<{ success: boolean; message: string; loginUsername: string }> => {
+  return api.put('/users/profile/login-username', data);
+};
+
+// 修改手机号
+export const updatePhone = (data: UpdatePhoneDto): Promise<{ success: boolean; message: string; phone: string }> => {
+  return api.put('/users/profile/phone', data);
+};
+
+// 检查登录用户名是否可用
+export const checkLoginUsername = (username: string): Promise<{ available: boolean }> => {
+  return api.get(`/users/check-login-username/${encodeURIComponent(username)}`);
+};
+
+// 检查手机号是否可用
+export const checkPhone = (phone: string): Promise<{ available: boolean }> => {
+  return api.get(`/users/check-phone/${encodeURIComponent(phone)}`);
 };
 

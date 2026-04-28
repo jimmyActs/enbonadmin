@@ -28,7 +28,7 @@ export interface UserContext {
  *
  * 工作流程：
  * 1. 若路由标记 @Public() → 跳过验证，直接返回 true
- * 2. 若无 Authorization Header → 返回 true（让 PermissionsGuard 统一拦截）
+ * 2. 若无 Authorization Header → 抛出 Unauthorized（必须登录）
  * 3. 若 Token 无效/过期 → 抛 Unauthorized
  * 4. 若 Token 有效 → 查询用户权限，注入 request.userContext
  */
@@ -54,9 +54,9 @@ export class AuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const authHeader: string | undefined = request.headers.authorization;
 
-    // === 2. 无 Token → 不抛错，让 PermissionsGuard 统一处理 ===
+    // === 2. 无 Token → 必须登录（抛出 401） ===
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return true;
+      throw new UnauthorizedException('请先登录');
     }
 
     const token = authHeader.substring(7);
@@ -74,7 +74,17 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('认证信息已过期，请重新登录');
     }
 
-    const isSuperAdmin = payload.role === UserRole.SUPER_ADMIN;
+    // 超级管理员判断：满足任一即可
+    // 1. JWT payload 的 role 为 super_admin（系统身份）
+    // 2. 绑定了 isSuperAdmin: true 的角色模板（权限身份）
+    const isByRole = payload.role === UserRole.SUPER_ADMIN;
+    let isByTemplate = false;
+    if (!isByRole) {
+      try {
+        isByTemplate = await this.permissionsService.isUserSuperAdmin(payload.sub, payload.role);
+      } catch { /* ignore */ }
+    }
+    const isSuperAdmin = isByRole || isByTemplate;
 
     // === 3. 查询用户权限 ===
     let permissions: string[] = [];
@@ -85,7 +95,9 @@ export class AuthGuard implements CanActivate {
       } else {
         permissions = await this.permissionsService.getUserEffectivePermissions(payload.sub);
       }
-    } catch {
+      console.log(`[AuthGuard] uid=${payload.sub} isSuperAdmin=${isSuperAdmin} permissions.length=${permissions.length}`, permissions.slice(0, 5));
+    } catch (e) {
+      console.error(`[AuthGuard] uid=${payload.sub} 查权限异常:`, e.message);
       // 查权限失败时，超级管理员走 isSuperAdmin 路线放行，普通用户则 permissions = []
       if (!isSuperAdmin) {
         permissions = [];

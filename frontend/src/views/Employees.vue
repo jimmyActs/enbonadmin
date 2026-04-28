@@ -51,6 +51,15 @@
         <el-button :icon="Refresh" @click="loadEmployees" class="toolbar-button-secondary">
           {{ $t('common.refresh') }}
         </el-button>
+        <el-button :icon="Upload" @click="handleImportEmployees" class="toolbar-button-secondary">
+          {{ $t('employees.importEmployees') }}
+        </el-button>
+        <el-button :icon="Download" @click="handleDownloadTemplate" :loading="downloadingTemplate" class="toolbar-button-secondary">
+          下载导入模板
+        </el-button>
+        <el-button :icon="Download" @click="handleExportEmployees" :loading="exportingEmployees" class="toolbar-button-secondary">
+          {{ $t('employees.exportEmployees') }}
+        </el-button>
         <el-select
           v-model="selectedDepartment"
           :placeholder="$t('employees.filterByDepartment')"
@@ -82,6 +91,14 @@
           </template>
         </el-input>
       </div>
+      <!-- 隐藏的文件上传控件（供导入使用） -->
+      <input
+        ref="empUploadInput"
+        type="file"
+        accept=".xlsx,.xls"
+        style="display: none"
+        @change="onEmpFileSelected"
+      />
     </div>
 
     <!-- 员工列表 -->
@@ -143,7 +160,7 @@
       </el-table>
     </div>
 
-    <!-- 查看详细对话框 -->
+    <!-- 查看详情对话框 -->
     <el-dialog
       v-model="showDetailDialog"
       :title="$t('employees.viewDetail')"
@@ -168,9 +185,8 @@
           </div>
           <div class="detail-info">
             <h3 class="detail-name">{{ detailEmployee.nickname }}</h3>
-            <!-- 职位 + 战区：销售同事显示“销售 · 欧亚组”等，其它部门只显示职位 -->
             <p class="detail-position">
-              <template v-if="detailEmployee.department === 'sales' && detailEmployee.team">
+              <template v-if="detailEmployee.department === 'sales_ops' && detailEmployee.team">
                 {{ getPositionName(detailEmployee.position) }} · {{ getTeamName(detailEmployee.team) }}
               </template>
               <template v-else>
@@ -227,7 +243,6 @@
               <div class="info-value">{{ detailEmployee?.school || '-' }}</div>
             </div>
 
-            <!-- 公司分配账号信息（仅在人事查看详情时展示，员工前台只读在“个人设置”中展示账号） -->
             <div class="info-item">
               <div class="info-label">{{ $t('employees.form.vpnAccount') }}</div>
               <div class="info-value">{{ detailEmployee?.vpnAccount || $t('profile.companyAccounts.none') }}</div>
@@ -390,7 +405,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item :label="$t('employees.form.position')" prop="position">
-              <el-select v-model="formData.position" style="width: 100%" filterable>
+              <el-select v-model="formData.position" style="width: 100%" filterable @change="handlePositionChange">
                 <el-option
                   v-for="pos in positionOptions"
                   :key="pos.value"
@@ -404,7 +419,6 @@
         </el-row>
 
         <el-row :gutter="20">
-          <!-- 系统角色：仅超级管理员可见，用于兼容旧的数据结构 -->
           <el-col :span="12" v-if="isSuperAdmin">
             <el-form-item :label="$t('employees.form.role')" prop="role">
               <el-select v-model="formData.role" style="width: 100%">
@@ -448,7 +462,6 @@
           <el-input v-model="formData.school" />
         </el-form-item>
 
-        <!-- 组织结构：小组/战区 & 组织角色 & 直接上级 -->
         <el-row :gutter="20">
           <el-col :span="12" v-if="showTeamField">
             <el-form-item :label="$t('employees.form.team')" prop="team">
@@ -491,7 +504,6 @@
           </el-select>
         </el-form-item>
 
-        <!-- 公司分配账号信息 -->
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item :label="$t('employees.form.vpnAccount')" prop="vpnAccount">
@@ -576,7 +588,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Refresh, Search, Edit, Delete, View, UserFilled, Avatar, OfficeBuilding, Briefcase } from '@element-plus/icons-vue'
+import { Plus, Refresh, Search, Edit, Delete, View, UserFilled, Avatar, OfficeBuilding, Briefcase, Upload, Download } from '@element-plus/icons-vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { useUserStore } from '../store/user'
 import {
@@ -589,27 +601,26 @@ import {
   type CreateEmployeeDto,
 } from '../api/employees'
 import { getAvatarUrl as getEmployeeAvatarUrl } from '../api/users'
+import { importEmployees, exportEmployees, downloadEmployeeTemplate } from '../api/hr'
+import { departments, allPositions as allPositionsData, getDepartmentLabel, getPositionLabel } from '../utils/organization'
 
 const { t, locale } = useI18n()
 const userStore = useUserStore()
 
-// 计算当前用户是否为超级管理员
 const isSuperAdmin = computed(() => {
-  return userStore.userInfo?.role === 'super_admin'
+  return userStore.isSuperAdmin
 })
 
-// 检查是否可以操作某个员工（admin账户只能由超级管理员操作）
 const canOperateEmployee = (employee: Employee): boolean => {
-  // 如果员工是admin账户，只有超级管理员可以操作
-  if (employee.username === 'admin') {
-    return isSuperAdmin.value
-  }
-  // 其他员工，有权限访问人员管理的都可以操作
-  return true
+  if (userStore.isSuperAdmin) return true
+  if (employee.username === 'admin') return false
+  return userStore.hasPermission('employees.edit') || userStore.hasPermission('employees.manage')
 }
 
 const loading = ref(false)
 const submitting = ref(false)
+const exportingEmployees = ref(false)
+const downloadingTemplate = ref(false)
 const employees = ref<Employee[]>([])
 const statistics = ref<any>(null)
 const searchKeyword = ref('')
@@ -619,6 +630,7 @@ const showDetailDialog = ref(false)
 const detailEmployee = ref<Employee | null>(null)
 const isEdit = ref(false)
 const formRef = ref<FormInstance>()
+const empUploadInput = ref<HTMLInputElement>()
 
 const formData = ref<Partial<CreateEmployeeDto> & { id?: number; employeeNumber?: string }>({
   username: '',
@@ -627,7 +639,7 @@ const formData = ref<Partial<CreateEmployeeDto> & { id?: number; employeeNumber?
   email: '',
   phone: '',
   role: 'employee',
-  department: 'planning',
+  department: 'general_office',
   gender: 'male',
   age: undefined,
   position: '',
@@ -638,16 +650,16 @@ const formData = ref<Partial<CreateEmployeeDto> & { id?: number; employeeNumber?
   team: '',
   orgRoleType: 'staff',
   directLeaderId: undefined,
-  vpnAccount: '', // VPN 登录账号
-  vpnPassword: '', // VPN 登录密码
-  facebookAccount: '', // Facebook 公司账号
-  facebookPassword: '', // Facebook 公司账号密码
-  linkedinAccount: '', // LinkedIn 公司账号
-  linkedinPassword: '', // LinkedIn 公司账号密码
-  whatsappAccount: '', // WhatsApp 公司账号
-  whatsappPassword: '', // WhatsApp 公司账号密码
-  instagramAccount: '', // Instagram 公司账号
-  instagramPassword: '', // Instagram 公司账号密码
+  vpnAccount: '',
+  vpnPassword: '',
+  facebookAccount: '',
+  facebookPassword: '',
+  linkedinAccount: '',
+  linkedinPassword: '',
+  whatsappAccount: '',
+  whatsappPassword: '',
+  instagramAccount: '',
+  instagramPassword: '',
 })
 
 const formRules = computed<FormRules>(() => ({
@@ -659,56 +671,29 @@ const formRules = computed<FormRules>(() => ({
   role: [{ required: true, message: t('employees.form.roleRequired'), trigger: 'change' }],
 }))
 
-const departments = computed(() => [
-  { label: t('employees.departments.planning'), value: 'planning' },
-  { label: t('employees.departments.sales'), value: 'sales' },
-  { label: t('employees.departments.tech'), value: 'tech' },
-  { label: t('employees.departments.finance'), value: 'finance' },
-  { label: t('employees.departments.hr'), value: 'hr' },
-  { label: t('employees.departments.domestic'), value: 'domestic' },
-  { label: t('employees.departments.management'), value: 'management' },
-])
+// 使用共享的组织架构配置
+const allPositions = allPositionsData
 
-// 职位下拉选项（使用职位编码存储，展示时通过 i18n 翻译）
-const positionOptions = computed(() => [
-  { label: t('employees.positionOptions.recruitment_specialist'), value: 'recruitment_specialist' },
-  { label: t('employees.positionOptions.admin_specialist'), value: 'admin_specialist' },
-  { label: t('employees.positionOptions.front_desk_receptionist'), value: 'front_desk_receptionist' },
-  { label: t('employees.positionOptions.director'), value: 'director' },
-  { label: t('employees.positionOptions.sales'), value: 'sales' },
-  { label: t('employees.positionOptions.supervisor'), value: 'supervisor' },
-  { label: t('employees.positionOptions.graphic_designer'), value: 'graphic_designer' },
-  { label: t('employees.positionOptions.design_assistant'), value: 'design_assistant' },
-  { label: t('employees.positionOptions.frontend_engineer'), value: 'frontend_engineer' },
-  { label: t('employees.positionOptions.after_sales_engineer'), value: 'after_sales_engineer' },
-  { label: t('employees.positionOptions.quality_specialist'), value: 'quality_specialist' },
-  { label: t('employees.positionOptions.purchasing_specialist'), value: 'purchasing_specialist' },
-  { label: t('employees.positionOptions.accountant_cashier'), value: 'accountant_cashier' },
-  { label: t('employees.positionOptions.finance_specialist'), value: 'finance_specialist' },
-  { label: t('employees.positionOptions.ceo'), value: 'ceo' },
-  { label: t('employees.positionOptions.chairman'), value: 'chairman' },
-  { label: t('employees.positionOptions.deputy_general_manager'), value: 'deputy_general_manager' },
-  { label: t('employees.positionOptions.special_shape_bu_gm'), value: 'special_shape_bu_gm' },
-  { label: t('employees.positionOptions.new_media_operator'), value: 'new_media_operator' },
-  { label: t('employees.positionOptions.copywriter'), value: 'copywriter' },
-  { label: t('employees.positionOptions.modeling_3d_artist'), value: 'modeling_3d_artist' },
-  { label: t('employees.positionOptions.merchandiser'), value: 'merchandiser' },
-])
+const filteredPositions = computed(() => {
+  if (!formData.value.department) return []
+  return allPositions.filter(p => p.departmentCode === formData.value.department)
+})
 
-// 敏感岗位编码列表：公司范围内仅能一人担任
-const sensitivePositionCodes = ['ceo', 'chairman', 'deputy_general_manager', 'special_shape_bu_gm']
+const positionOptions = computed(() => filteredPositions.value.map(p => ({
+  label: p.name,
+  value: p.code
+})))
 
-// 根据职位编码获取展示名称（兼容旧数据：如果不是编码则直接返回原值）
+const sensitivePositionCodes = ['ceo', 'chairman']
+
 const getPositionName = (position?: string | null): string => {
   if (!position) return '-'
-  const option = positionOptions.value.find(p => p.value === position)
-  return option ? option.label : position
+  // 使用共享配置，支持国际化
+  return getPositionLabel(position, locale.value === 'en-US' ? 'en' : 'zh')
 }
 
-// 判断某个职位是否已被其他员工占用（用于禁用敏感岗位）
 const isPositionDisabled = (code: string): boolean => {
   if (!sensitivePositionCodes.includes(code)) return false
-  // 查找是否有其它员工已使用该敏感岗位（排除当前正在编辑的员工）
   const holder = employees.value.find(emp => {
     if (emp.position !== code) return false
     if (formData.value.id && emp.id === formData.value.id) return false
@@ -725,9 +710,69 @@ const roles = [
   { label: t('employees.roles.hrReception'), value: 'hr_reception' },
   { label: t('employees.roles.finance'), value: 'finance' },
   { label: t('employees.roles.guest'), value: 'guest' },
-  // 兼容旧数据
   { label: t('employees.roles.hr'), value: 'hr' },
 ]
+
+// 职位 → 系统身份映射：选择职位时自动设置对应角色
+const positionRoleMapping: Record<string, string> = {
+  chairman: 'super_admin',
+  ceo: 'super_admin',
+  hr_director: 'hr_director',
+  hr_front_desk: 'hr_reception',
+  hr_recruiter: 'hr',
+  hr_admin: 'hr',
+  hr_cleaner: 'employee',
+  hr_clerk: 'employee',
+  hr_bp_probation: 'employee',
+  finance_director: 'finance',
+  accountant: 'finance',
+  finance_specialist: 'finance',
+  finance_saudi: 'finance',
+  brand_director: 'department_head',
+  brand_planner_leader: 'department_head',
+  web_front_end: 'employee',
+  operations_assistant: 'employee',
+  new_media_ops: 'employee',
+  graphic_designer: 'employee',
+  graphic_designer_asst: 'employee',
+  '3d_animator': 'employee',
+  social_media_mgr: 'employee',
+  delivery_vp: 'super_admin',
+  quality_supervisor: 'department_head',
+  quality_specialist: 'employee',
+  tech_supervisor: 'department_head',
+  led_struct_engineer: 'employee',
+  warehouse_specialist: 'employee',
+  procurement_specialist: 'employee',
+  pmc_supervisor: 'department_head',
+  pmc_specialist: 'employee',
+  after_sales_engineer: 'employee',
+  after_sales_asst: 'employee',
+  saudi_warehouse: 'employee',
+  intl_after_sales: 'employee',
+  rd_director: 'department_head',
+  structural_engineer: 'employee',
+  electronic_engineer: 'employee',
+  engineer_asst: 'employee',
+  sales_director: 'department_head',
+  sales_supervisor: 'department_head',
+  sales_overseas: 'employee',
+  sales_merchandiser: 'employee',
+  sales_japanese_merch: 'employee',
+  sales_ali_ops: 'employee',
+  sales_after_sales: 'employee',
+  sales_after_sales_mgr: 'department_head',
+  sales_intl_after_sales: 'employee',
+  sales_resident: 'employee',
+  sales_leader: 'department_head',
+  sales_after_sales_lead: 'department_head',
+}
+
+const handlePositionChange = (positionCode: string) => {
+  if (positionCode && positionRoleMapping[positionCode]) {
+    ;(formData.value as any).role = positionRoleMapping[positionCode]
+  }
+}
 
 const employmentStatuses = computed(() => [
   { label: t('employees.employmentStatuses.active'), value: 'active' },
@@ -736,25 +781,21 @@ const employmentStatuses = computed(() => [
   { label: t('employees.employmentStatuses.suspended'), value: 'suspended' },
 ])
 
-// 小组/战区选项（目前仅销售部使用）
-const teams = computed(() => [
-  { label: t('employees.teams.sales_japan_korea'), value: 'sales_japan_korea' }, // 销售-日韩组
-  { label: t('employees.teams.sales_middle_east'), value: 'sales_middle_east' }, // 销售-中东组
-  { label: t('employees.teams.sales_india'), value: 'sales_india' }, // 销售-印度组
-  { label: t('employees.teams.sales_europe_asia'), value: 'sales_europe_asia' }, // 销售-欧亚组
-])
+const teams = [
+  { label: '日韩运营组', value: 'ops_jk' },
+  { label: '印度运营组', value: 'ops_india' },
+  { label: '中东运营组', value: 'ops_me' },
+  { label: '欧亚运营组', value: 'ops_ea' },
+  { label: '巴伊运营组', value: 'ops_bay' },
+]
 
-// 当前部门可用的小组/战区选项（例如：企划部等非销售部门就不展示销售战区）
 const availableTeams = computed(() => {
-  // 只有销售部员工才展示销售战区选项
-  if (formData.value.department === 'sales') {
-    return teams.value
+  if (formData.value.department === 'sales_ops') {
+    return teams
   }
-  // 其他部门暂时没有细分小组/战区，返回空数组
   return []
 })
 
-// 是否需要展示“小组/战区”下拉框（根据当前部门是否存在可用战区来决定）
 const showTeamField = computed(() => availableTeams.value.length > 0)
 
 const dialogTitle = computed(() => {
@@ -764,12 +805,10 @@ const dialogTitle = computed(() => {
 const filteredEmployees = computed(() => {
   let result = employees.value
 
-  // 按部门筛选
   if (selectedDepartment.value) {
     result = result.filter(emp => emp.department === selectedDepartment.value)
   }
 
-  // 按搜索关键词筛选
   if (searchKeyword.value) {
     const keyword = searchKeyword.value.toLowerCase()
     result = result.filter(emp =>
@@ -784,14 +823,10 @@ const filteredEmployees = computed(() => {
   return result
 })
 
-// 直接上级候选人：过滤当前列表中被标记为团队负责人/部门负责人的员工
 const leaderOptions = computed(() => {
   return employees.value.filter(emp => {
-    // 自己不能是自己的上级
     if (formData.value.id && emp.id === formData.value.id) return false
-    // 仅允许组织角色为小组负责人或部门负责人
     if (emp.orgRoleType !== 'team_lead' && emp.orgRoleType !== 'dept_manager') return false
-    // 如果选择了team，则优先限制在同一team内
     if (formData.value.team && emp.team && emp.team !== formData.value.team) return false
     return true
   })
@@ -799,16 +834,14 @@ const leaderOptions = computed(() => {
 
 const getDepartmentName = (dept?: string): string => {
   if (!dept) return '-'
-  const deptInfo = departments.value.find(d => d.value === dept)
-  return deptInfo?.label || dept
+  // 使用共享配置，支持国际化
+  return getDepartmentLabel(dept, locale.value === 'en-US' ? 'en' : 'zh')
 }
 
 const getTeamName = (team?: string): string => {
   if (!team) return '-'
-  const teamInfo = teams.value.find(t => t.value === team)
-  const label = teamInfo?.label || team
-  // 更简洁：去掉前缀“销售-”，只保留战区名（例如 “销售-欧亚组” -> “欧亚组”）
-  return label.replace(/^销售[-：:\s]*/, '')
+  const teamInfo = teams.find(t => t.value === team)
+  return teamInfo?.label || team
 }
 
 const getStatusType = (status: string): string => {
@@ -852,12 +885,80 @@ const loadEmployees = async () => {
   }
 }
 
+// ==================== 员工导入/导出 ====================
+const handleImportEmployees = () => {
+  empUploadInput.value?.click()
+}
+
+const onEmpFileSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = '' // 清空以便下次重复选择同一文件
+
+  try {
+    const result = await importEmployees(file)
+    ElMessage.success(
+      `员工导入完成：新增 ${result.imported || 0}，更新 ${result.updated || 0}，跳过 ${result.skipped || 0}`
+    )
+    loadEmployees() // 刷新列表
+  } catch (err: any) {
+    ElMessage.error('导入失败：' + (err?.message || '未知错误'))
+  }
+}
+
+const handleDownloadTemplate = async () => {
+  downloadingTemplate.value = true
+  try {
+    const res = await downloadEmployeeTemplate()
+    const binary = atob(res.buffer)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.filename
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('员工导入模板下载成功')
+  } catch (err: any) {
+    ElMessage.error('下载失败：' + (err?.message || '未知错误'))
+  } finally {
+    downloadingTemplate.value = false
+  }
+}
+
+const handleExportEmployees = async () => {
+  exportingEmployees.value = true
+  try {
+    const res = await exportEmployees()
+    const binary = atob(res.buffer)
+    const bytes = new Uint8Array(binary.length)
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+    const blob = new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.filename
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success('员工花名册导出成功')
+  } catch (err: any) {
+    ElMessage.error('导出失败：' + (err?.message || '未知错误'))
+  } finally {
+    exportingEmployees.value = false
+  }
+}
+
 const handleSearch = () => {
-  // 搜索逻辑已在computed中处理
 }
 
 const handleDepartmentFilter = () => {
-  // 部门筛选逻辑已在computed中处理
 }
 
 const handleAdd = () => {
@@ -869,7 +970,7 @@ const handleAdd = () => {
     email: '',
     phone: '',
     role: 'employee',
-    department: 'planning',
+    department: 'general_office',
     gender: 'male',
     age: undefined,
     position: '',
@@ -880,26 +981,23 @@ const handleAdd = () => {
     team: '',
     orgRoleType: 'staff',
     directLeaderId: undefined,
-    vpnAccount: '', // VPN 登录账号
-    vpnPassword: '', // VPN 登录密码
-    facebookAccount: '', // Facebook 公司账号
-    facebookPassword: '', // Facebook 公司账号密码
-    linkedinAccount: '', // LinkedIn 公司账号
-    linkedinPassword: '', // LinkedIn 公司账号密码
-    whatsappAccount: '', // WhatsApp 公司账号
-    whatsappPassword: '', // WhatsApp 公司账号密码
-    instagramAccount: '', // Instagram 公司账号
-    instagramPassword: '', // Instagram 公司账号密码
+    vpnAccount: '',
+    vpnPassword: '',
+    facebookAccount: '',
+    facebookPassword: '',
+    linkedinAccount: '',
+    linkedinPassword: '',
+    whatsappAccount: '',
+    whatsappPassword: '',
+    instagramAccount: '',
+    instagramPassword: '',
   }
   showDialog.value = true
 }
 
-// 获取头像完整URL - 使用与工作群组相同的方式
 const getAvatarUrl = (avatar?: string): string => {
   if (!avatar) return ''
   
-  // 如果avatar是完整路径，提取文件名
-  // 例如: /users/avatar/1_1234567890.jpg -> 1_1234567890.jpg
   const filename = avatar.includes('/') ? avatar.split('/').pop() : avatar
   
   if (filename) {
@@ -926,7 +1024,7 @@ const handleEdit = (employee: Employee) => {
   formData.value = {
     id: employee.id,
     username: employee.username,
-    password: '', // 编辑时不修改密码，留空
+    password: '',
     nickname: employee.nickname,
     email: employee.email,
     phone: employee.phone,
@@ -942,16 +1040,16 @@ const handleEdit = (employee: Employee) => {
     team: employee.team,
     orgRoleType: (employee.orgRoleType as any) || 'staff',
     directLeaderId: employee.directLeaderId ?? undefined,
-    vpnAccount: employee.vpnAccount, // VPN 登录账号
-    vpnPassword: employee.vpnPassword, // VPN 登录密码
-    facebookAccount: employee.facebookAccount, // Facebook 公司账号
-    facebookPassword: employee.facebookPassword, // Facebook 公司账号密码
-    linkedinAccount: employee.linkedinAccount, // LinkedIn 公司账号
-    linkedinPassword: employee.linkedinPassword, // LinkedIn 公司账号密码
-    whatsappAccount: employee.whatsappAccount, // WhatsApp 公司账号
-    whatsappPassword: employee.whatsappPassword, // WhatsApp 公司账号密码
-    instagramAccount: employee.instagramAccount, // Instagram 公司账号
-    instagramPassword: employee.instagramPassword, // Instagram 公司账号密码
+    vpnAccount: employee.vpnAccount,
+    vpnPassword: employee.vpnPassword,
+    facebookAccount: employee.facebookAccount,
+    facebookPassword: employee.facebookPassword,
+    linkedinAccount: employee.linkedinAccount,
+    linkedinPassword: employee.linkedinPassword,
+    whatsappAccount: employee.whatsappAccount,
+    whatsappPassword: employee.whatsappPassword,
+    instagramAccount: employee.instagramAccount,
+    instagramPassword: employee.instagramPassword,
   }
   showDialog.value = true
 }
@@ -981,7 +1079,6 @@ const handleSubmit = async () => {
   try {
     await formRef.value.validate()
 
-    // 前端防守性校验：敏感岗位唯一性检查
     const currentPosition = formData.value.position as string | undefined
     if (currentPosition && sensitivePositionCodes.includes(currentPosition)) {
       const holder = employees.value.find(emp => {
@@ -999,18 +1096,15 @@ const handleSubmit = async () => {
 
     const submitData = { ...formData.value }
     
-    // 如果是编辑且没有输入密码，则不发送密码字段
     if (isEdit.value && !submitData.password) {
       delete submitData.password
     }
 
-    // 清理空字符串字段，将它们转换为undefined（可选字段）
     const optionalFields: (keyof typeof submitData)[] = [
-      'email', // 邮箱
-      'phone', // 电话
-      'school', // 学校
-      'address', // 地址
-      // 公司分配账号信息
+      'email',
+      'phone',
+      'school',
+      'address',
       'vpnAccount',
       'vpnPassword',
       'facebookAccount',
@@ -1021,7 +1115,6 @@ const handleSubmit = async () => {
       'whatsappPassword',
       'instagramAccount',
       'instagramPassword',
-      // 组织结构信息
       'team',
       'orgRoleType',
       'directLeaderId',
@@ -1043,7 +1136,7 @@ const handleSubmit = async () => {
     showDialog.value = false
     loadEmployees()
   } catch (error: any) {
-    if (error !== false) { // 表单验证失败时error为false
+    if (error !== false) {
       ElMessage.error(error.message || t('common.error'))
     }
   } finally {
@@ -1070,7 +1163,6 @@ onMounted(() => {
     letter-spacing: -0.02em;
   }
 
-  // 统计卡片网格
   .statistics-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1139,7 +1231,6 @@ onMounted(() => {
     }
   }
 
-  // 工具栏卡片
   .toolbar-card {
     background: #ffffff;
     border: 1px solid #e5e5e7;
@@ -1200,7 +1291,6 @@ onMounted(() => {
     }
   }
 
-  // 表格卡片
   .table-card {
     background: #ffffff;
     border: 1px solid #e5e5e7;
@@ -1326,7 +1416,6 @@ onMounted(() => {
     font-size: 12px;
   }
 
-  // 查看详细对话框样式 - 扁平化、现代、简约、圆角
   .employee-detail {
     .detail-header {
       display: flex;
@@ -1432,14 +1521,13 @@ onMounted(() => {
     }
   }
 
-  // 查看详细对话框自定义样式
   :deep(.employee-detail-dialog) {
     .el-dialog {
       border-radius: 20px;
       overflow: hidden;
       box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
       border: none;
-      margin-top: 8vh !important; // 调整弹窗位置，向上移动
+      margin-top: 8vh !important;
     }
     
     .el-dialog__wrapper {
@@ -1511,12 +1599,11 @@ onMounted(() => {
   }
 }
 
-// 对话框样式优化
 :deep(.modern-dialog) {
   .el-dialog {
     border-radius: 16px;
     overflow: hidden;
-    margin-top: 8vh; // 增加顶部间距，让编辑员工弹窗离顶部更远一些
+    margin-top: 8vh;
   }
 
   .el-dialog__header {
@@ -1565,7 +1652,6 @@ onMounted(() => {
   }
 }
 
-// 响应式设计
 @media (max-width: 1200px) {
   .employees-container {
     .statistics-grid {
@@ -1592,4 +1678,3 @@ onMounted(() => {
   }
 }
 </style>
-

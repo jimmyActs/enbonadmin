@@ -11,6 +11,9 @@
             <el-button type="info" :icon="UserFilled" @click="showDuplicateDialog = true">
               {{ $t('crm.customers.checkDuplicate') }}
             </el-button>
+            <el-button type="warning" plain :icon="Refresh" @click="showRecycleBinDialog = true" v-if="isAdmin">
+              {{ $t('crm.customers.recycleBin.title') || '回收站' }}
+            </el-button>
             <el-button type="primary" :icon="Plus" @click="handleAdd">
               {{ $t('sales.customers.addCustomer') }}
             </el-button>
@@ -20,6 +23,25 @@
 
       <!-- 筛选区域 -->
       <div class="filter-bar">
+        <!-- 数据查看范围切换器（仅团队权限用户可见） -->
+        <el-radio-group v-if="canViewTeam" v-model="viewScope" size="small" @change="onViewScopeChange" style="margin-right: 12px;">
+          <el-radio-button value="self">{{ $t('crm.viewScope.self') }}</el-radio-button>
+          <el-radio-button value="team">{{ $t('crm.viewScope.team') }}</el-radio-button>
+          <el-radio-button value="user">{{ $t('crm.viewScope.user') }}</el-radio-button>
+        </el-radio-group>
+
+        <!-- 指定成员选择器 -->
+        <el-select
+          v-if="canViewTeam && viewScope === 'user'"
+          v-model="targetUserId"
+          :placeholder="$t('crm.viewScope.selectUser')"
+          clearable filterable
+          style="width: 180px; margin-right: 12px;"
+          @change="handleFilter"
+        >
+          <el-option v-for="member in teamMembers" :key="member.id" :label="member.nickname || member.username" :value="member.id" />
+        </el-select>
+
         <el-input
           v-model="searchText"
           :placeholder="$t('sales.customers.searchPlaceholder')"
@@ -92,8 +114,28 @@
         </el-button>
       </div>
 
+      <!-- 批量操作工具栏（选中时显示） -->
+      <div class="batch-toolbar" v-if="selectedCustomers.length > 0">
+        <span class="batch-info">
+          {{ $t('crm.customers.selectedCount') || '已选择' }} {{ selectedCustomers.length }} {{ $t('crm.customers.selectedUnit') || '条' }}
+        </span>
+        <el-button size="small" @click="selectedCustomers = []">
+          {{ $t('common.clear') || '清除选择' }}
+        </el-button>
+        <el-button type="primary" size="small" :icon="UserFilled" @click="showBatchAssignDialog = true">
+          {{ $t('crm.customers.batchAssignOwner') || '批量分配负责人' }}
+        </el-button>
+        <el-button type="warning" size="small" :icon="Message" @click="showBatchReleaseDialog = true">
+          {{ $t('crm.customers.batchRelease') || '批量释放到公海' }}
+        </el-button>
+        <el-button type="danger" size="small" :icon="Delete" @click="confirmBatchDelete">
+          {{ $t('crm.customers.batchDelete') || '批量删除' }}
+        </el-button>
+      </div>
+
       <!-- 客户列表 -->
-      <el-table :data="filteredCustomers" stripe v-loading="loading" row-key="id">
+      <el-table :data="filteredCustomers" stripe v-loading="loading" row-key="id" @selection-change="onSelectionChange">
+        <el-table-column type="selection" width="45" />
         <el-table-column prop="customerCode" :label="$t('crm.customers.customerCode')" width="170">
           <template #default="{ row }">
             <span class="customer-code">{{ row.customerCode }}</span>
@@ -152,8 +194,11 @@
             </div>
           </template>
         </el-table-column>
-        <el-table-column :label="$t('common.operations')" width="220" fixed="right">
+        <el-table-column :label="$t('common.operations')" width="280" fixed="right">
           <template #default="{ row }">
+            <el-button type="info" size="small" :icon="User" @click="handleViewDetail(row)">
+              {{ $t('crm.customers.viewDetail') || '详情' }}
+            </el-button>
             <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)">
               {{ $t('common.edit') }}
             </el-button>
@@ -177,6 +222,80 @@
         style="margin-top: 16px; justify-content: flex-end;"
       />
     </el-card>
+
+    <!-- 客户详情对话框 -->
+    <el-dialog
+      v-model="showDetailDialog"
+      :title="detailCustomer ? detailCustomer.customerName : ''"
+      width="900px"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
+      class="customer-detail-dialog"
+    >
+      <el-tabs v-if="detailCustomer" v-model="detailActiveTab">
+        <el-tab-pane name="info" :label="$t('crm.customers.detailTabs.info') || '基本信息'">
+          <div class="customer-info-panel">
+            <el-descriptions :column="2" border>
+              <el-descriptions-item :label="$t('crm.customers.customerCode') || '客户编码'">{{ detailCustomer.customerCode }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('sales.customers.country') || '国家'">{{ detailCustomer.country || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.companyName') || '公司名称'">{{ detailCustomer.companyName || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.phone') || '电话'">{{ detailCustomer.phone || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.email') || '邮箱'">{{ detailCustomer.email || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.inquirySource') || '询盘来源'">{{ getInquirySourceLabel(detailCustomer.inquirySource) }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('sales.customers.status') || '客户状态'">
+                <el-tag size="small" :type="getStatusType(detailCustomer.status)">{{ getStatusText(detailCustomer.status) }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item :label="$t('sales.customers.dealStatus') || '成交状态'">
+                <el-tag size="small" :type="getDealStatusType(detailCustomer.dealStatus)">{{ getDealStatusText(detailCustomer.dealStatus) }}</el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.estimatedRevenue') || '预估营收'">
+                {{ detailCustomer.estimatedRevenue ? '¥' + Number(detailCustomer.estimatedRevenue).toLocaleString() : '-' }}
+              </el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.actualRevenue') || '实际营收'">
+                {{ detailCustomer.actualRevenue ? '¥' + Number(detailCustomer.actualRevenue).toLocaleString() : '-' }}
+              </el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.owner') || '负责人'">{{ detailCustomer.ownerName || getOwnerName(detailCustomer.ownerId) }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.assignedAt') || '分配时间'">{{ formatDate(detailCustomer.ownerAssignedAt) }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.lastContact') || '最近联系'">{{ formatDate(detailCustomer.lastContact) }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('crm.customers.lastMaintainAt') || '最后维护'">{{ formatDate(detailCustomer.lastMaintainAt) }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('sales.customers.content') || '询盘内容'" :span="2">{{ detailCustomer.content || '-' }}</el-descriptions-item>
+              <el-descriptions-item :label="$t('sales.customers.notes') || '备注'" :span="2">{{ detailCustomer.notes || '-' }}</el-descriptions-item>
+            </el-descriptions>
+          </div>
+        </el-tab-pane>
+        <el-tab-pane name="timeline" :label="$t('crm.customers.detailTabs.timeline') || '变更历史'">
+          <div class="timeline-panel">
+            <div v-if="changelogLoading" class="timeline-loading">
+              <el-icon class="is-loading"><Loading /></el-icon> {{ t('common.loading') }}
+            </div>
+            <el-timeline v-else-if="changelogEntries.length > 0" class="customer-timeline">
+              <el-timeline-item
+                v-for="entry in changelogEntries"
+                :key="entry.id"
+                :timestamp="formatDate(entry.createdAt)"
+                placement="top"
+                :type="getTimelineItemType(entry.action)"
+              >
+                <el-card shadow="never" class="timeline-card">
+                  <div class="timeline-action">
+                    <el-tag size="small" :type="getTimelineItemType(entry.action)">{{ getActionText(entry.action) }}</el-tag>
+                  </div>
+                  <div class="timeline-summary">{{ entry.summary || getFieldChangeText(entry) }}</div>
+                  <div v-if="entry.operatorName" class="timeline-operator">{{ entry.operatorName }}</div>
+                </el-card>
+              </el-timeline-item>
+            </el-timeline>
+            <el-empty v-else :description="$t('crm.changelog.noTimeline') || '暂无变更记录'" />
+          </div>
+        </el-tab-pane>
+      </el-tabs>
+      <template #footer>
+        <el-button @click="showDetailDialog = false">{{ t('common.close') }}</el-button>
+        <el-button type="primary" :icon="Edit" @click="handleEditFromDetail">
+          {{ t('common.edit') }}
+        </el-button>
+      </template>
+    </el-dialog>
 
     <!-- 添加/编辑客户对话框 -->
     <el-dialog
@@ -442,24 +561,143 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <!-- 批量分配负责人对话框 -->
+    <el-dialog v-model="showBatchAssignDialog" :title="$t('crm.customers.batchAssignOwner') || '批量分配负责人'" width="400px"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }" :z-index="100000">
+      <el-form label-width="100px">
+        <el-form-item :label="$t('crm.customers.owner') || '负责人'">
+          <el-select v-model="batchOwnerId" filterable :placeholder="$t('common.pleaseSelect')" style="width: 100%">
+            <el-option v-for="m in teamMembers" :key="m.id" :label="m.nickname || m.username" :value="m.id" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showBatchAssignDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="primary" @click="confirmBatchAssign" :loading="batchAssigning">
+          {{ $t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 批量释放到公海对话框 -->
+    <el-dialog v-model="showBatchReleaseDialog" :title="$t('crm.customers.batchRelease') || '批量释放到公海'" width="400px"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }" :z-index="100000">
+      <el-form label-width="100px">
+        <el-form-item :label="$t('crm.pool.releaseReason')">
+          <el-select v-model="releaseReason" style="width: 100%">
+            <el-option :label="$t('crm.pool.reasons.no_activity_30_days')" value="no_activity_30_days" />
+            <el-option :label="$t('crm.pool.reasons.manual_release')" value="manual_release" />
+            <el-option :label="$t('crm.pool.reasons.duplicate_release')" value="duplicate_release" />
+            <el-option :label="$t('crm.pool.reasons.supervisor_release')" value="supervisor_release" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showBatchReleaseDialog = false">{{ $t('common.cancel') }}</el-button>
+        <el-button type="warning" @click="confirmBatchRelease" :loading="batchReleasing">
+          {{ $t('common.confirm') }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 回收站对话框 -->
+    <el-dialog
+      v-model="showRecycleBinDialog"
+      :title="$t('crm.customers.recycleBin.title') || '回收站'"
+      width="1000px"
+      :overlay-style="{ backgroundColor: 'rgba(0,0,0,0.6)', zIndex: '99998' }"
+      :z-index="100000"
+    >
+      <div class="filter-bar" style="margin-bottom: 12px;">
+        <el-input
+          v-model="recycleSearchText"
+          :placeholder="$t('crm.customers.recycleBin.searchPlaceholder') || '搜索客户名称/编码'"
+          clearable
+          style="width: 240px;"
+          @input="debouncedLoadRecycle"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+      </div>
+
+      <el-table
+        :data="filteredRecycleItems"
+        stripe
+        v-loading="recycleLoading"
+        row-key="id"
+        @selection-change="onRecycleSelectionChange"
+      >
+        <el-table-column type="selection" width="45" />
+        <el-table-column prop="customerCode" :label="$t('crm.customers.customerCode')" width="160" />
+        <el-table-column prop="customerName" :label="$t('sales.customers.customerName')" min-width="160" />
+        <el-table-column prop="country" :label="$t('sales.customers.country')" width="110" />
+        <el-table-column :label="$t('crm.customers.recycleBin.deletedAt') || '删除时间'" width="160">
+          <template #default="{ row }">
+            {{ formatDate(row.deletedAt) }}
+          </template>
+        </el-table-column>
+        <el-table-column :label="$t('common.operations')" width="220" fixed="right">
+          <template #default="{ row }">
+            <el-button type="success" size="small" :icon="Refresh" @click="confirmRestore(row)">
+              {{ $t('crm.customers.recycleBin.restore') || '恢复' }}
+            </el-button>
+            <el-button type="danger" size="small" :icon="Delete" @click="confirmPermanentDelete(row)">
+              {{ $t('crm.customers.recycleBin.permanentDelete') || '永久删除' }}
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-pagination
+        v-if="recycleTotal > 0"
+        v-model:current-page="recyclePage"
+        :page-size="recyclePageSize"
+        :total="recycleTotal"
+        layout="prev, pager, next, total"
+        @current-change="loadRecycleBin"
+        style="margin-top: 16px; justify-content: flex-end;"
+      />
+
+      <div v-if="selectedRecycleItems.length > 0" class="batch-toolbar" style="margin-top: 12px;">
+        <span class="batch-info">
+          {{ $t('crm.customers.selectedCount') || '已选择' }} {{ selectedRecycleItems.length }} {{ $t('crm.customers.selectedUnit') || '条' }}
+        </span>
+        <el-button type="success" size="small" :icon="Refresh" @click="confirmBatchRestore">
+          {{ $t('crm.customers.recycleBin.batchRestore') || '批量恢复' }}
+        </el-button>
+        <el-button type="danger" size="small" :icon="Delete" @click="confirmBatchPermanentDelete">
+          {{ $t('crm.customers.recycleBin.batchPermanentDelete') || '批量永久删除' }}
+        </el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { User, Plus, Search, Refresh, Edit, Delete, UserFilled, Message } from '@element-plus/icons-vue'
+import { User, Plus, Search, Refresh, Edit, Delete, UserFilled, Message, Loading } from '@element-plus/icons-vue'
 import { filterData } from '../../utils/search'
 import {
   getCrmCustomers, createCrmCustomer, updateCrmCustomer, deleteCrmCustomer,
-  checkCrmDuplicate, releaseCrmToPool,
+  checkCrmDuplicate, releaseCrmToPool, getCrmSelectableMembers,
+  batchAssignOwner, batchReleaseToPool, batchDeleteCustomers,
+  getCustomerChangelog,
+  getRecycleBin, restoreCustomer, batchRestoreCustomers,
+  permanentDeleteCustomer, batchPermanentDelete,
   type CrmCustomer, type DuplicateCheckResult, type PoolReason
 } from '../../api/crm'
+import { getEmployeeOptions } from '../../api/employees'
 import { CRM_COUNTRIES } from '../../utils/crm-countries'
+import { useUserStore } from '../../store/user'
 
 const { t, locale } = useI18n()
+const userStore = useUserStore()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -479,12 +717,46 @@ const customerFormRef = ref<FormInstance>()
 const showDuplicateDialog = ref(false)
 const showReleaseDialog = ref(false)
 const releasing = ref(false)
+const selectedCustomers = ref<CrmCustomer[]>([])
+const showBatchAssignDialog = ref(false)
+const showBatchReleaseDialog = ref(false)
+
+// 回收站状态
+const showRecycleBinDialog = ref(false)
+const recycleItems = ref<any[]>([])
+const recycleTotal = ref(0)
+const recyclePage = ref(1)
+const recyclePageSize = ref(20)
+const recycleSearchText = ref('')
+const recycleLoading = ref(false)
+const selectedRecycleItems = ref<any[]>([])
+
+const isAdmin = computed(() => userStore.isSuperAdmin || userStore.hasPermission('crm.admin'))
+const batchOwnerId = ref<number | undefined>(undefined)
+const batchReleasing = ref(false)
+const batchAssigning = ref(false)
 const checkingDuplicate = ref(false)
 const checkedDuplicate = ref(false)
 const duplicateResults = ref<DuplicateCheckResult[]>([])
 const duplicateCheck = ref({ name: '', country: '' })
 const releaseReason = ref('manual_release')
 const releasingCustomer = ref<CrmCustomer | null>(null)
+
+// 客户详情对话框
+const showDetailDialog = ref(false)
+const detailCustomer = ref<CrmCustomer | null>(null)
+const detailActiveTab = ref('info')
+const changelogEntries = ref<any[]>([])
+const changelogLoading = ref(false)
+
+// 数据查看范围相关
+const viewScope = ref<'self' | 'team' | 'user'>('self')
+const targetUserId = ref<number | undefined>(undefined)
+const teamMembers = ref<Array<{ id: number; nickname?: string; username: string; department?: string; position?: string }>>([])
+const allEmployees = ref<Array<{ id: number; nickname?: string; username: string }>>([])
+
+// 是否有团队查看权限
+const canViewTeam = computed(() => userStore.hasPermission('crm.stats.team'))
 
 const newTagInput = ref('')
 const addingTag = ref(false)
@@ -548,10 +820,24 @@ const filteredCustomers = computed(() => {
   )
 })
 
+const filteredRecycleItems = computed(() => {
+  return filterData(
+    recycleItems.value,
+    recycleSearchText.value,
+    ['customerCode', 'customerName', 'companyName', 'country']
+  )
+})
+
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 const debouncedLoad = () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => { currentPage.value = 1; loadCustomers() }, 400)
+}
+
+let recycleSearchTimer: ReturnType<typeof setTimeout> | null = null
+const debouncedLoadRecycle = () => {
+  if (recycleSearchTimer) clearTimeout(recycleSearchTimer)
+  recycleSearchTimer = setTimeout(() => { recyclePage.value = 1; loadRecycleBin() }, 400)
 }
 
 const handleFilter = () => {
@@ -576,6 +862,10 @@ const loadCustomers = async () => {
     const params: any = {
       page: currentPage.value,
       pageSize: pageSize.value,
+      viewScope: viewScope.value,
+    }
+    if (viewScope.value === 'user' && targetUserId.value) {
+      params.targetUserId = targetUserId.value
     }
     if (searchText.value) params.keyword = searchText.value
     if (countryFilter.value) params.country = countryFilter.value
@@ -600,6 +890,34 @@ const loadCustomers = async () => {
   }
 }
 
+const onViewScopeChange = () => {
+  if (viewScope.value === 'self') {
+    targetUserId.value = undefined
+  }
+  loadCustomers()
+}
+
+const loadTeamMembers = async () => {
+  try {
+    const res = await getCrmSelectableMembers()
+    teamMembers.value = res
+  } catch (error) {
+    console.error('加载团队成员失败', error)
+  }
+}
+
+const loadAllEmployees = async () => {
+  try {
+    const res = await getEmployeeOptions()
+    allEmployees.value = res.map((e: any) => ({
+      id: e.id,
+      nickname: e.nickname,
+    }))
+  } catch (error) {
+    console.error('加载员工列表失败', error)
+  }
+}
+
 const parseTags = (tagsStr: string | null | undefined): string[] => {
   if (!tagsStr) return []
   try {
@@ -612,6 +930,12 @@ const parseTags = (tagsStr: string | null | undefined): string[] => {
 
 const renderStars = (rating: number): string => {
   return '★'.repeat(rating) + '☆'.repeat(5 - rating)
+}
+
+const getOwnerName = (ownerId: number | null): string => {
+  if (!ownerId) return '-'
+  const emp = allEmployees.value.find(e => e.id === ownerId)
+  return emp?.nickname || emp?.username || `#${ownerId}`
 }
 
 const getInquirySourceLabel = (source: string | null | undefined): string => {
@@ -651,6 +975,54 @@ const dealStatuses = computed(() => ({
   delivered: t('sales.customers.dealStatuses.delivered'),
   completed: t('sales.customers.dealStatuses.completed'),
 }))
+
+// 客户详情时间轴相关
+const getTimelineItemType = (action: string): string => {
+  const map: Record<string, string> = {
+    create: 'success',
+    update: 'primary',
+    assign_owner: 'warning',
+    release_to_pool: 'danger',
+    claim_from_pool: 'success',
+    delete: 'danger',
+  }
+  return map[action] || 'info'
+}
+
+const getActionText = (action: string): string => {
+  const map: Record<string, string> = {
+    create: t('crm.changelog.action.create'),
+    update: t('crm.changelog.action.update'),
+    assign_owner: t('crm.changelog.action.assign_owner'),
+    release_to_pool: t('crm.changelog.action.release_to_pool'),
+    claim_from_pool: t('crm.changelog.action.claim_from_pool'),
+    delete: t('crm.changelog.action.delete'),
+  }
+  return map[action] || action
+}
+
+const getFieldChangeText = (entry: any): string => {
+  if (!entry.field) return entry.summary || ''
+  const fieldMap: Record<string, string> = {
+    customerName: t('crm.customers.customerName') || '客户名称',
+    companyName: t('crm.customers.companyName') || '公司名称',
+    status: t('sales.customers.status') || '客户状态',
+    dealStatus: t('sales.customers.dealStatus') || '成交状态',
+    ownerId: t('crm.customers.owner') || '负责人',
+    phone: t('crm.customers.phone') || '电话',
+    email: t('crm.customers.email') || '邮箱',
+    country: t('sales.customers.country') || '国家',
+    estimatedRevenue: t('crm.customers.estimatedRevenue') || '预估营收',
+  }
+  const fieldLabel = fieldMap[entry.field] || entry.field
+  if (entry.oldValue === null || entry.oldValue === undefined || entry.oldValue === '') {
+    return `${fieldLabel}: ${entry.newValue || '-'}`
+  }
+  if (entry.newValue === null || entry.newValue === undefined || entry.newValue === '') {
+    return `${fieldLabel}: ${entry.oldValue} → ${t('crm.changelog.deleted') || '已删除'}`
+  }
+  return `${fieldLabel}: ${entry.oldValue} → ${entry.newValue}`
+}
 
 const handleAdd = () => {
   editingCustomer.value = null
@@ -695,6 +1067,34 @@ const handleEdit = (customer: CrmCustomer) => {
   showCustomerDialog.value = true
 }
 
+// 打开客户详情对话框
+const handleViewDetail = async (customer: CrmCustomer) => {
+  detailCustomer.value = customer
+  detailActiveTab.value = 'info'
+  changelogEntries.value = []
+  showDetailDialog.value = true
+  if (customer.id) {
+    changelogLoading.value = true
+    try {
+      const res = await getCustomerChangelog(customer.id, 1, 50)
+      changelogEntries.value = res.data || []
+    } catch {
+      changelogEntries.value = []
+    } finally {
+      changelogLoading.value = false
+    }
+  }
+}
+
+// 从详情页编辑
+const handleEditFromDetail = () => {
+  if (!detailCustomer.value) return
+  showDetailDialog.value = false
+  nextTick(() => {
+    handleEdit(detailCustomer.value!)
+  })
+}
+
 const handleDelete = async (customer: CrmCustomer) => {
   try {
     await ElMessageBox.confirm(
@@ -729,6 +1129,175 @@ const confirmRelease = async () => {
     releasing.value = false
   }
 }
+
+const onSelectionChange = (rows: CrmCustomer[]) => {
+  selectedCustomers.value = rows
+}
+
+const confirmBatchAssign = async () => {
+  if (!batchOwnerId.value) {
+    ElMessage.warning(t('common.pleaseSelect') + t('crm.customers.owner'))
+    return
+  }
+  batchAssigning.value = true
+  try {
+    const ids = selectedCustomers.value.map(c => c.id)
+    const result = await batchAssignOwner(ids, batchOwnerId.value)
+    ElMessage.success(`${t('crm.customers.assignSuccess') || '分配成功'} ${result.success}/${ids.length}`)
+    showBatchAssignDialog.value = false
+    selectedCustomers.value = []
+    await loadCustomers()
+  } catch (error: any) {
+    ElMessage.error(error.message || t('common.error'))
+  } finally {
+    batchAssigning.value = false
+  }
+}
+
+const showBatchReleaseDialogFn = () => {
+  if (!selectedCustomers.value.length) return
+  releaseReason.value = 'manual_release'
+  showBatchReleaseDialog.value = true
+}
+
+const confirmBatchRelease = async () => {
+  batchReleasing.value = true
+  try {
+    const ids = selectedCustomers.value.map(c => c.id)
+    const result = await batchReleaseToPool(ids, releaseReason.value as PoolReason)
+    ElMessage.success(`${t('crm.customers.batchReleaseSuccess') || '释放成功'} ${result.success}/${ids.length}`)
+    showBatchReleaseDialog.value = false
+    selectedCustomers.value = []
+    await loadCustomers()
+  } catch (error: any) {
+    ElMessage.error(error.message || t('common.error'))
+  } finally {
+    batchReleasing.value = false
+  }
+}
+
+const confirmBatchDelete = async () => {
+  const ids = selectedCustomers.value.map(c => c.id)
+  try {
+    await ElMessageBox.confirm(
+      `${t('crm.customers.batchDeleteConfirm') || '确定批量删除'} ${ids.length} ${t('crm.customers.selectedUnit') || '条'}客户？此操作不可恢复。`,
+      t('common.warning'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+    const result = await batchDeleteCustomers(ids)
+    ElMessage.success(`${t('crm.customers.deleteSuccess') || '删除成功'} ${result.success}/${ids.length}`)
+    selectedCustomers.value = []
+    await loadCustomers()
+  } catch {
+    // cancelled
+  }
+}
+
+// ========== 回收站 ==========
+
+const loadRecycleBin = async () => {
+  recycleLoading.value = true
+  try {
+    const res = await getRecycleBin({
+      page: recyclePage.value,
+      pageSize: recyclePageSize.value,
+      ...(recycleSearchText.value ? { keyword: recycleSearchText.value } : {}),
+    })
+    recycleItems.value = res.data
+    recycleTotal.value = res.total
+  } catch (error: any) {
+    ElMessage.error(error.message || t('common.error'))
+  } finally {
+    recycleLoading.value = false
+  }
+}
+
+const onRecycleSelectionChange = (rows: any[]) => {
+  selectedRecycleItems.value = rows
+}
+
+const confirmRestore = async (item: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `${t('crm.customers.recycleBin.restoreConfirm') || '确定恢复客户'} "${item.customerName}"？`,
+      t('common.warning'),
+      { confirmButtonText: t('crm.customers.recycleBin.restore') || '恢复', cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+    await restoreCustomer(item.id)
+    ElMessage.success(t('crm.customers.recycleBin.restoreSuccess') || '恢复成功')
+    await loadRecycleBin()
+    await loadCustomers()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+}
+
+const confirmPermanentDelete = async (item: any) => {
+  try {
+    await ElMessageBox.confirm(
+      `${t('crm.customers.recycleBin.permanentDeleteConfirm') || '确定永久删除客户'} "${item.customerName}"？此操作不可恢复！`,
+      t('common.danger'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'error' }
+    )
+    await permanentDeleteCustomer(item.id)
+    ElMessage.success(t('crm.customers.recycleBin.permanentDeleteSuccess') || '永久删除成功')
+    await loadRecycleBin()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+}
+
+const confirmBatchRestore = async () => {
+  const ids = selectedRecycleItems.value.map((item: any) => item.id)
+  try {
+    await ElMessageBox.confirm(
+      `${t('crm.customers.recycleBin.batchRestoreConfirm') || '确定批量恢复'} ${ids.length} ${t('crm.customers.selectedUnit') || '条'}客户？`,
+      t('common.warning'),
+      { confirmButtonText: t('crm.customers.recycleBin.restore') || '恢复', cancelButtonText: t('common.cancel'), type: 'warning' }
+    )
+    const result = await batchRestoreCustomers(ids)
+    ElMessage.success(`${t('crm.customers.recycleBin.restoreSuccess') || '恢复成功'} ${result.success}/${ids.length}`)
+    selectedRecycleItems.value = []
+    await loadRecycleBin()
+    await loadCustomers()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+}
+
+const confirmBatchPermanentDelete = async () => {
+  const ids = selectedRecycleItems.value.map((item: any) => item.id)
+  try {
+    await ElMessageBox.confirm(
+      `${t('crm.customers.recycleBin.batchPermanentDeleteConfirm') || '确定批量永久删除'} ${ids.length} ${t('crm.customers.selectedUnit') || '条'}客户？此操作不可恢复！`,
+      t('common.danger'),
+      { confirmButtonText: t('common.delete'), cancelButtonText: t('common.cancel'), type: 'error' }
+    )
+    const result = await batchPermanentDelete(ids)
+    ElMessage.success(`${t('crm.customers.recycleBin.permanentDeleteSuccess') || '永久删除成功'} ${result.success}/${ids.length}`)
+    selectedRecycleItems.value = []
+    await loadRecycleBin()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || t('common.error'))
+    }
+  }
+}
+
+watch(showRecycleBinDialog, (val) => {
+  if (val) {
+    recyclePage.value = 1
+    recycleSearchText.value = ''
+    selectedRecycleItems.value = []
+    loadRecycleBin()
+  }
+})
 
 const handleSave = async () => {
   if (!customerFormRef.value) return
@@ -828,6 +1397,10 @@ const doCheckDuplicate = async () => {
 
 onMounted(() => {
   loadCustomers()
+  loadAllEmployees()
+  if (canViewTeam.value) {
+    loadTeamMembers()
+  }
 })
 
 const reload = () => loadCustomers()

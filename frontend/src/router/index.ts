@@ -8,16 +8,27 @@ import i18n from '../i18n'
 const routePermissionMap: Record<string, string[]> = {
   '/employees': ['employee.manage.view'],
   '/hr': ['hr.recruitment.board.view', 'hr.attendance.view', 'hr.payroll.view', 'hr.performance.view'],
-  '/sales': ['crm.customer.view', 'crm.lead.view'],
-  '/finance': ['finance.report.view.basic'],
+  '/sales': ['crm.customer.view', 'crm.lead.view', 'crm.stats.view'],
+  '/finance': ['finance.*', 'finance.report.view.basic'],
   '/crm': ['crm.customer.view', 'crm.lead.view', 'crm.stats.view'],
-  '/workflow': ['system.permission.view'],
+  '/crm/team-dashboard': ['crm.stats.team', 'crm.stats.view', 'crm.*'],
+  '/workflow': [],          // 仅超级管理员可见（由路由守卫 isSuperAdmin 控制）
   // 文件管理：所有登录用户可访问（留空 = 无需特定权限）
   '/files': [],
-  '/permissions': ['system.permission.view', 'system.permission.assign'],
-  '/workspace/company-files': ['workspace.companyFiles.view'],
-  '/workspace/software-downloads': ['workspace.software.view'],
+  '/permissions': [],      // 仅超级管理员可见（由路由守卫 isSuperAdmin 控制）
+  '/workspace/company-files': ['workspace.companyFiles.view', 'workspace.companyFiles.manage'],
+  '/workspace/software-downloads': ['workspace.software.view', 'workspace.software.manage'],
   '/workspace/company-culture': ['workspace.companyCulture.manage', 'hr.banner.manage'],
+}
+
+/** 路由 → 所需可见模块（用于菜单显示控制） */
+const routeModuleMap: Record<string, string> = {
+  '/crm': 'crm',
+  '/sales': 'sales_workbench',
+  '/hr': 'hr',
+  '/finance': 'finance',
+  '/employees': 'employees',
+  '/permissions': 'permissions',
 }
 
 const routes: Array<RouteRecordRaw> = [
@@ -82,6 +93,15 @@ const routes: Array<RouteRecordRaw> = [
         meta: { titleKey: 'layout.menu.crm', requiresAuth: true }
       },
       {
+        path: '/crm/team-dashboard',
+        name: 'CrmTeamDashboard',
+        component: () => import('../views/CrmTeamDashboard.vue'),
+        meta: {
+          titleKey: 'layout.menu.crmTeamDashboard',
+          requiresAuth: true,
+        }
+      },
+      {
         path: '/finance',
         name: 'Finance',
         component: () => import('../views/Finance.vue'),
@@ -118,6 +138,12 @@ const routes: Array<RouteRecordRaw> = [
         meta: { titleKey: 'layout.user.profile', requiresAuth: true }
       },
       {
+        path: '/self-service',
+        name: 'SelfService',
+        component: () => import('../views/SelfService.vue'),
+        meta: { titleKey: 'selfService.title', requiresAuth: true }
+      },
+      {
         path: '/permissions',
         name: 'PermissionCenter',
         component: () => import('../views/PermissionCenter.vue'),
@@ -144,7 +170,11 @@ router.beforeEach((to, _from, next) => {
   const userStore = useUserStore()
 
   if (to.path === '/login') {
-    next(token ? '/' : undefined)
+    if (token) {
+      next('/')
+    } else {
+      next()
+    }
     return
   }
 
@@ -174,9 +204,17 @@ router.beforeEach((to, _from, next) => {
       return
     }
 
-    // 超级管理员 bypass 所有路由权限检查
-    if (userInfo.role === 'super_admin') {
+    // 超级管理员 bypass 所有路由权限检查（包括系统身份和角色模板双重判定）
+    if (userStore.isSuperAdmin) {
       next()
+      return
+    }
+
+    // 模块可见性检查（基于后端 PermissionEngineService 计算的 visibleModules）
+    const requiredModule = routeModuleMap[to.path]
+    if (requiredModule && !userStore.canAccessModule(requiredModule)) {
+      ElMessage.warning(i18n.global.t('common.noModuleAccess'))
+      next('/index')
       return
     }
 

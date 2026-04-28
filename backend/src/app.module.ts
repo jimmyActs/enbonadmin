@@ -23,6 +23,7 @@ import { DailyWorksModule } from './modules/daily-works/daily-works.module';
 import { CompanyFilesModule } from './modules/company-files/company-files.module';
 import { SoftwareDownloadsModule } from './modules/software-downloads/software-downloads.module';
 import { WorkspaceStorageModule } from './modules/workspace-storage/workspace-storage.module';
+import { WorkspaceAdminModule } from './modules/workspace/workspace-admin.module';
 import { OnlineStatusModule } from './modules/online-status/online-status.module';
 import { CompanyCultureModule } from './modules/company-culture/company-culture.module';
 import { AiLinksModule } from './modules/ai-links/ai-links.module';
@@ -31,6 +32,9 @@ import { HrModule } from './modules/hr/hr.module';
 import { ExcelImportModule } from './modules/excel-import/excel-import.module';
 import { ImportHistoryModule } from './modules/import-history/import-history.module';
 import { ScheduleModule } from '@nestjs/schedule';
+import { AuditModule } from './modules/audit/audit.module';
+import { EmailModule } from './common/email/email.module';
+import { StorageModule } from './modules/storage/storage.module';
 
 @Module({
   imports: [
@@ -39,6 +43,8 @@ import { ScheduleModule } from '@nestjs/schedule';
       envFilePath: '.env',
     }),
     TypeOrmModule.forRoot(databaseConfig()),
+    // EmailModule 必须放在最前面（其他模块可能依赖它）
+    EmailModule,
     // PermissionsModule 必须在 AuthModule 前面（AuthGuard 依赖 PermissionsService）
     PermissionsModule,
     AuthModule,
@@ -56,6 +62,7 @@ import { ScheduleModule } from '@nestjs/schedule';
     CompanyFilesModule,
     SoftwareDownloadsModule,
     WorkspaceStorageModule,
+    WorkspaceAdminModule,
     OnlineStatusModule,
     CompanyCultureModule,
     AiLinksModule,
@@ -64,6 +71,8 @@ import { ScheduleModule } from '@nestjs/schedule';
     HrModule,
     ExcelImportModule,
     ImportHistoryModule,
+    AuditModule,
+    StorageModule,
   ],
   controllers: [AppController],
   providers: [

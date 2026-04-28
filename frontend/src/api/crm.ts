@@ -44,6 +44,7 @@ export interface CrmCustomer {
   starRating: number
   tags?: string | null
   ownerId?: number | null
+  ownerName?: string | null  // 后端自动解析的负责人姓名
   ownerAssignedAt?: string | null
   lastMaintainAt?: string | null
   lastContact?: string | null
@@ -94,6 +95,7 @@ export interface CrmLead {
   inquiryContent?: string | null
   priority: LeadPriority
   assignedTo?: number | null
+  assignedToName?: string | null  // 后端自动解析的负责人姓名
   assignedAt?: string | null
   createdBy?: number | null
   status: LeadStatus
@@ -105,6 +107,9 @@ export interface CrmLead {
   notes?: string | null
   website?: string | null
   websiteId?: number | null
+  isInPool: boolean
+  poolReason?: string | null
+  poolTime?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -361,6 +366,44 @@ export const releaseCrmToPool = (id: number, reason: PoolReason): Promise<CrmCus
   return api.post(`/crm/pool/${id}/release`, { reason })
 }
 
+// ----- 客户批量操作 -----
+export interface BatchResult { success: number; failed: number }
+
+export const batchAssignOwner = (ids: number[], ownerId: number): Promise<BatchResult> => {
+  return api.post('/crm/customers/batch-assign-owner', { ids, ownerId })
+}
+
+export const batchReleaseToPool = (ids: number[], reason: PoolReason): Promise<BatchResult> => {
+  return api.post('/crm/customers/batch-release', { ids, reason })
+}
+
+export const batchDeleteCustomers = (ids: number[]): Promise<BatchResult> => {
+  return api.post('/crm/customers/batch-delete', { ids })
+}
+
+export interface ChangelogEntry {
+  id: number
+  customerId: number
+  action: 'create' | 'update' | 'assign_owner' | 'release_to_pool' | 'claim_from_pool' | 'delete'
+  field: string | null
+  oldValue: string | null
+  newValue: string | null
+  summary: string | null
+  operatorId: number | null
+  operatorName: string | null
+  ipAddress: string | null
+  createdAt: string
+}
+
+export interface ChangelogResponse {
+  data: ChangelogEntry[]
+  total: number
+}
+
+export const getCustomerChangelog = (customerId: number, page = 1, pageSize = 20): Promise<ChangelogResponse> => {
+  return api.get(`/crm/customers/${customerId}/changelog`, { params: { page, pageSize } })
+}
+
 // ----- 商机 -----
 
 export const getCrmLeads = (params?: CrmLeadQuery): Promise<CrmLeadListResponse> => {
@@ -387,6 +430,38 @@ export const convertCrmLead = (id: number, customerData?: Partial<CrmCustomer>):
   return api.post(`/crm/leads/${id}/convert`, customerData || {})
 }
 
+// ----- 待分配询盘 -----
+
+export const getCrmPendingLeads = (params?: {
+  page?: number; pageSize?: number; keyword?: string; source?: string; country?: string
+}): Promise<CrmLeadListResponse> => {
+  return api.get('/crm/leads/pending', { params })
+}
+
+export const assignCrmLead = (id: number, assignedTo: number | null): Promise<CrmLead> => {
+  return api.post(`/crm/leads/${id}/assign`, { assignedTo })
+}
+
+// ----- 线索公海池 -----
+
+export const getCrmLeadPool = (params?: {
+  page?: number; pageSize?: number; keyword?: string; source?: string; country?: string; priority?: string
+}): Promise<{ data: CrmLead[]; total: number; page: number; pageSize: number }> => {
+  return api.get('/crm/lead-pool', { params })
+}
+
+export const claimCrmLeadFromPool = (id: number): Promise<CrmLead> => {
+  return api.post(`/crm/lead-pool/${id}/claim`)
+}
+
+export const releaseCrmLeadToPool = (id: number, reason: string): Promise<CrmLead> => {
+  return api.post(`/crm/lead-pool/${id}/release`, { reason })
+}
+
+export const autoAssignCrmLeadPool = (): Promise<{ assigned: number; remaining: number }> => {
+  return api.post('/crm/lead-pool/auto-assign')
+}
+
 // ----- 邮件 -----
 
 export const getCrmEmails = (params?: {
@@ -397,6 +472,25 @@ export const getCrmEmails = (params?: {
 
 export const createCrmEmail = (data: Partial<CrmEmail>): Promise<CrmEmail> => {
   return api.post('/crm/emails', data)
+}
+
+export const sendCrmEmail = (data: { to: string; cc?: string; subject: string; body: string; attachments?: { filename: string; size: number; url: string }[] }): Promise<CrmEmail> => {
+  return api.post('/crm/emails/send', data)
+}
+
+export const saveCrmEmailDraft = (data: {
+  direction?: string
+  subject?: string
+  bodyText?: string
+  toEmail?: string
+  ccRecipients?: string
+  isDraft?: boolean
+}): Promise<CrmEmail> => {
+  return api.post('/crm/emails', data)
+}
+
+export const markEmailRead = (id: number): Promise<void> => {
+  return api.post(`/crm/emails/${id}/read`)
 }
 
 export const updateCrmEmail = (id: number, data: Partial<CrmEmail>): Promise<CrmEmail> => {
@@ -541,6 +635,62 @@ export const getCrmTrends = (params?: { period?: TrendPeriod; range?: number }):
   return api.get('/crm/stats/trends', { params })
 }
 
+// ----- 团队看板 -----
+
+export interface TeamKpi {
+  totalCustomers: number
+  totalLeads: number
+  closedDeals: number
+  totalRevenue: number
+  newThisMonth: number
+  memberCount: number
+}
+
+export interface TeamMember {
+  ownerId: number
+  ownerName: string
+  totalCustomers: number
+  closedDeals: number
+  totalRevenue: number
+  newThisMonth: number
+}
+
+export interface SelectableMember {
+  id: number
+  nickname?: string
+  username: string
+  department?: string
+  position?: string
+}
+
+export interface TeamFunnelItem {
+  status: string
+  label: string
+  count: number
+}
+
+export interface TeamViewParams {
+  viewScope?: 'self' | 'department' | 'user'
+  targetUserId?: number
+  department?: string
+}
+
+export const getCrmTeamKpi = (params?: TeamViewParams): Promise<TeamKpi> => {
+  return api.get('/crm/team-kpi', { params })
+}
+
+export const getCrmTeamMembers = (params?: TeamViewParams): Promise<TeamMember[]> => {
+  return api.get('/crm/team/members', { params })
+}
+
+export const getCrmTeamFunnel = (params?: TeamViewParams): Promise<TeamFunnelItem[]> => {
+  return api.get('/crm/team/funnel', { params })
+}
+
+export const getCrmSelectableMembers = (): Promise<SelectableMember[]> => {
+  return api.get('/crm/team/members/selectable')
+}
+
 // ========== 报价单 ==========
 
 export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired'
@@ -548,6 +698,7 @@ export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expi
 export interface Quotation {
   id: number
   quotationNumber: string
+  customerId?: number | null
   customerName: string
   productName: string
   quantity: number
@@ -586,6 +737,64 @@ export const updateQuotation = (id: number, data: Partial<Quotation>): Promise<Q
 
 export const deleteQuotation = (id: number): Promise<{ success: boolean }> => {
   return api.delete(`/crm/quotations/${id}`)
+}
+
+// ========== 报价进展跟踪 ==========
+
+export type QuotationTrackType = 'STATUS_CHANGE' | 'VIEW' | 'COMMENT' | 'REVISION' | 'APPROVAL' | 'EMAIL' | 'REMINDER'
+
+export interface QuotationTrack {
+  id: number
+  quotationId: number
+  trackType: QuotationTrackType
+  title?: string | null
+  description?: string | null
+  fromStatus?: string | null
+  toStatus?: string | null
+  attachments?: string[] | null
+  operatorId?: number | null
+  extraData?: Record<string, any> | null
+  createdAt: string
+}
+
+export interface QuotationVersion {
+  id: number
+  quotationId: number
+  version: number
+  snapshot: Record<string, any>
+  changeSummary?: string | null
+  createdBy: number
+  createdAt: string
+}
+
+export const getQuotationTracks = (quotationId: number): Promise<QuotationTrack[]> => {
+  return api.get(`/crm/quotations/${quotationId}/tracks`)
+}
+
+export const addQuotationTrack = (
+  quotationId: number,
+  data: {
+    trackType: QuotationTrackType
+    title?: string
+    description?: string
+    fromStatus?: string
+    toStatus?: string
+    attachments?: string[]
+    extraData?: Record<string, any>
+  }
+): Promise<QuotationTrack> => {
+  return api.post(`/crm/quotations/${quotationId}/tracks`, data)
+}
+
+export const getQuotationVersions = (quotationId: number): Promise<QuotationVersion[]> => {
+  return api.get(`/crm/quotations/${quotationId}/versions`)
+}
+
+export const createQuotationVersion = (
+  quotationId: number,
+  changeSummary?: string
+): Promise<QuotationVersion> => {
+  return api.post(`/crm/quotations/${quotationId}/versions`, { changeSummary })
 }
 
 // ========== 销售目标（内存存储）==========
@@ -729,4 +938,34 @@ export const importCrmInquirySources = (file: File): Promise<ImportResult> => {
 /** 询盘来源导入模板下载 */
 export const downloadInquirySourcesTemplate = (): Promise<{ buffer: string; filename: string }> => {
   return api.get('/import/crm/inquiry-sources/template')
+}
+
+// ========== 回收站 ==========
+
+export interface RecycleBinItem extends CrmCustomer {
+  deletedAt: string
+}
+
+export const getRecycleBin = (params?: {
+  page?: number
+  pageSize?: number
+  keyword?: string
+}): Promise<{ data: RecycleBinItem[]; total: number; page: number; pageSize: number }> => {
+  return api.get('/crm/customers/recycle-bin', { params })
+}
+
+export const restoreCustomer = (id: number): Promise<{ success: boolean }> => {
+  return api.post(`/crm/customers/${id}/restore`)
+}
+
+export const batchRestoreCustomers = (ids: number[]): Promise<{ success: number; failed: number }> => {
+  return api.post('/crm/customers/batch-restore', { ids })
+}
+
+export const permanentDeleteCustomer = (id: number): Promise<{ success: boolean }> => {
+  return api.delete(`/crm/customers/${id}/permanent`)
+}
+
+export const batchPermanentDelete = (ids: number[]): Promise<{ success: number; failed: number }> => {
+  return api.post('/crm/customers/batch-permanent-delete', { ids })
 }

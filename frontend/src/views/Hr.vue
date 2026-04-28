@@ -123,6 +123,66 @@
         <EventPlanningModule />
       </el-tab-pane>
 
+      <!-- 离职管理 -->
+      <el-tab-pane
+        v-if="canViewExit"
+        :label="$t('hr.modules.exit')"
+        name="exit"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Switch /></el-icon>
+            <span>{{ $t('hr.modules.exit') }}</span>
+          </span>
+        </template>
+        <ExitAnalysisModule />
+      </el-tab-pane>
+
+      <!-- 试用期跟踪 -->
+      <el-tab-pane
+        v-if="canViewProbation"
+        :label="$t('hr.modules.probation')"
+        name="probation"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Timer /></el-icon>
+            <span>{{ $t('hr.modules.probation') }}</span>
+          </span>
+        </template>
+        <ProbationModule />
+      </el-tab-pane>
+
+      <!-- 薪酬预算 -->
+      <el-tab-pane
+        v-if="canViewPayrollBudget"
+        :label="$t('hr.modules.payrollBudget')"
+        name="payroll_budget"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Money /></el-icon>
+            <span>{{ $t('hr.modules.payrollBudget') }}</span>
+          </span>
+        </template>
+        <PayrollBudgetModule />
+      </el-tab-pane>
+
+      <!-- 培训管理 -->
+      <el-tab-pane
+        v-if="canViewTraining"
+        :label="$t('hr.modules.training')"
+        name="training"
+      >
+        <template #label>
+          <span class="tab-label">
+            <el-icon><Reading /></el-icon>
+            <span>{{ $t('hr.modules.training') }}</span>
+          </span>
+        </template>
+        <TrainingModule />
+      </el-tab-pane>
+
       <!-- 导入管理 -->
       <el-tab-pane
         v-if="canAccessImport"
@@ -142,7 +202,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { DataBoard, Clock, DataLine, UserFilled, Money, OfficeBuilding, Document, Calendar, Upload } from '@element-plus/icons-vue'
+import { DataBoard, Clock, DataLine, UserFilled, Money, OfficeBuilding, Document, Calendar, Upload, Switch, Timer, Reading } from '@element-plus/icons-vue'
 import { useUserStore } from '../store/user'
 
 // 导入模块组件
@@ -155,6 +215,10 @@ import AdminReceptionModule from '../components/workspace/AdminReceptionModule.v
 import AnnouncementModule from '../components/workspace/AnnouncementModule.vue'
 import EventPlanningModule from '../components/hr/EventPlanningModule.vue'
 import ImportModule from '../components/shared/ImportModule.vue'
+import ExitAnalysisModule from '../components/hr/ExitAnalysisModule.vue'
+import ProbationModule from '../components/hr/ProbationModule.vue'
+import PayrollBudgetModule from '../components/hr/PayrollBudgetModule.vue'
+import TrainingModule from '../components/hr/TrainingModule.vue'
 
 const userStore = useUserStore()
 
@@ -179,6 +243,10 @@ const canPublishAnnouncement = computed(() => userStore.hasPermission('hr.announ
 const canViewEvent = computed(() => userStore.hasPermission('hr.event.view'))
 const canCreateEvent = computed(() => userStore.hasPermission('hr.event.create'))
 const canAccessImport = computed(() => userStore.hasAnyPermission(['hr.attendance.import', 'hr.payroll.import']))
+const canViewExit = computed(() => userStore.hasAnyPermission(['hr.exit.view', 'hr.exit.stats']))
+const canViewProbation = computed(() => userStore.hasAnyPermission(['hr.probation.view', 'hr.probation.manage']))
+const canViewPayrollBudget = computed(() => userStore.hasAnyPermission(['hr.payroll.budget.manage', 'hr.payroll.cost.view', 'hr.payroll.alert.manage']))
+const canViewTraining = computed(() => userStore.hasAnyPermission(['hr.training.view', 'hr.training.create', 'hr.training.stats']))
 
 // 当前激活的模块
 const activeModule = ref<string>('')

@@ -18,3 +18,72 @@ body {
   width: 100%;
   height: 100vh;
 }
+
+/* ================================================================
+   el-dialog 弹窗样式 - 统一居中定位 + 现代设计
+   ================================================================ */
+.el-dialog {
+  margin: 0 !important;
+  position: fixed !important;
+  top: 0% !important;
+  z-index: 100000 !important;
+  max-height: 90vh !important;
+  overflow: unset !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border-radius: 16px !important;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15) !important;
+  border: 1px solid #e8e8e8;
+  transform: none !important;
+}
+
+.el-dialog__wrapper {
+  position: fixed !important;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.6) !important;
+  overflow: hidden !important;
+  pointer-events: auto !important;
+  transform: none !important;
+}
+
+.el-dialog__header {
+  padding: 20px 24px 16px !important;
+  border-bottom: 1px solid #f0f0f0 !important;
+  flex-shrink: 0;
+}
+
+.el-dialog__body {
+  overflow-y: auto !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: calc(90vh - 120px);
+  padding: 24px !important;
+}
+
+.el-dialog__footer {
+  padding: 16px 24px 20px !important;
+  border-top: 1px solid #f0f0f0 !important;
+  flex-shrink: 0;
+}
+
+/* ================================================================
+   el-table 表格样式 - 修复操作按钮列重叠
+   ================================================================ */
+.el-table .cell {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.el-table .cell > * {
+  flex-shrink: 0 !important;
+}
+
+.el-table .el-button {
+  white-space: nowrap !important;
+}
+
+.el-table__body-wrapper .el-table__body .el-table__row .el-table_1_column_999 {
+  min-width: 200px !important;
+}

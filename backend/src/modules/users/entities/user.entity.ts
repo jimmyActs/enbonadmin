@@ -1,4 +1,55 @@
-import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, Column, PrimaryGeneratedColumn, CreateDateColumn, UpdateDateColumn, BeforeInsert, BeforeUpdate } from 'typeorm';
+import * as crypto from 'crypto';
+
+// AES-256-GCM 加密配置
+const ENCRYPTION_KEY = process.env.PASSWORD_ENCRYPTION_KEY || 'development-key-32-bytes-long!!'; // 32 bytes
+const IV_LENGTH = 16;
+const TAG_LENGTH = 16;
+
+/**
+ * 加密敏感字段（公司账号密码等）
+ * 使用 AES-256-GCM 模式，提供认证加密
+ */
+function encryptField(text: string | null | undefined): string | null {
+  if (!text) return null;
+  try {
+    const iv = crypto.randomBytes(IV_LENGTH);
+    const cipher = crypto.createCipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'utf8'), iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    const authTag = cipher.getAuthTag();
+    // 格式: iv:authTag:encrypted
+    return `${iv.toString('hex')}:${authTag.toString('hex')}:${encrypted}`;
+  } catch {
+    console.error('Encryption failed');
+    return null;
+  }
+}
+
+/**
+ * 解密敏感字段
+ */
+function decryptField(encryptedText: string | null | undefined): string | null {
+  if (!encryptedText) return null;
+  try {
+    const parts = encryptedText.split(':');
+    if (parts.length !== 3) {
+      // 非加密格式（原数据），直接返回
+      return encryptedText;
+    }
+    const [ivHex, authTagHex, encrypted] = parts;
+    const iv = Buffer.from(ivHex, 'hex');
+    const authTag = Buffer.from(authTagHex, 'hex');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', Buffer.from(ENCRYPTION_KEY, 'utf8'), iv);
+    decipher.setAuthTag(authTag);
+    let decrypted = decipher.update(encrypted, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch {
+    // 尝试原值返回（兼容旧数据）
+    return encryptedText;
+  }
+}
 
 export enum UserRole {
   SUPER_ADMIN = 'super_admin', // 超级管理员
@@ -13,13 +64,13 @@ export enum UserRole {
 }
 
 export enum Department {
-  PLANNING = 'planning', // 企划部
-  SALES = 'sales', // 销售部
-  TECH = 'tech', // 技术部
-  FINANCE = 'finance', // 财务部
-  HR = 'hr', // 人事行政
-  DOMESTIC = 'domestic', // 国内区
-  MANAGEMENT = 'management', // 总经办
+  GENERAL_OFFICE = 'general_office', // 总经办
+  HR_CENTER = 'hr_center', // 人力资源中心
+  FINANCE_CENTER = 'finance_center', // 财务管理中心
+  BRAND_CENTER = 'brand_center', // 品牌管理中心
+  DELIVERY_CENTER = 'delivery_center', // 交付管理中心
+  RD_CENTER = 'rd_center', // 研发中心
+  SALES_OPS = 'sales_ops', // 销售运营中心
 }
 
 export enum Gender {
@@ -84,8 +135,12 @@ export class User {
   @Column({ nullable: true })
   email: string;
 
-  @Column({ nullable: true })
+  @Column({ unique: true, nullable: true })
   phone: string;
+
+  /** 独立登录用户名（可独立于系统内显示名修改，需唯一） */
+  @Column({ unique: true, nullable: true })
+  loginUsername: string;
 
   @Column({
     type: 'simple-enum',
@@ -162,37 +217,79 @@ export class User {
   directLeaderId: number | null; // 直接上级用户ID，用于汇报和审批流转
 
   // === 公司分配账号信息（仅人事/管理员可维护，员工只能查看） ===
+  // 注意：所有密码字段已加密存储，使用 AES-256-GCM
   @Column({ nullable: true }) // VPN 登录账号
-  vpnAccount: string; // VPN 登录账号
+  vpnAccount: string;
 
-  @Column({ nullable: true }) // VPN 登录密码（当前为明文存储，后续可改为加密）
-  vpnPassword: string; // VPN 登录密码
+  @Column({ nullable: true }) // VPN 登录密码（已加密存储）
+  private _vpnPassword: string;
 
   @Column({ nullable: true }) // Facebook 公司账号
-  facebookAccount: string; // Facebook 公司账号
+  facebookAccount: string;
 
-  @Column({ nullable: true }) // Facebook 公司账号密码
-  facebookPassword: string; // Facebook 公司账号密码
+  @Column({ nullable: true }) // Facebook 公司账号密码（已加密存储）
+  private _facebookPassword: string;
 
   @Column({ nullable: true }) // LinkedIn 公司账号
-  linkedinAccount: string; // LinkedIn 公司账号
+  linkedinAccount: string;
 
-  @Column({ nullable: true }) // LinkedIn 公司账号密码
-  linkedinPassword: string; // LinkedIn 公司账号密码
+  @Column({ nullable: true }) // LinkedIn 公司账号密码（已加密存储）
+  private _linkedinPassword: string;
 
   @Column({ nullable: true }) // WhatsApp 公司账号
-  whatsappAccount: string; // WhatsApp 公司账号
+  whatsappAccount: string;
 
-  @Column({ nullable: true }) // WhatsApp 公司账号密码
-  whatsappPassword: string; // WhatsApp 公司账号密码
+  @Column({ nullable: true }) // WhatsApp 公司账号密码（已加密存储）
+  private _whatsappPassword: string;
 
   @Column({ nullable: true }) // Instagram 公司账号
-  instagramAccount: string; // Instagram 公司账号
+  instagramAccount: string;
 
-  @Column({ nullable: true }) // Instagram 公司账号密码
-  instagramPassword: string; // Instagram 公司账号密码
+  @Column({ nullable: true }) // Instagram 公司账号密码（已加密存储）
+  private _instagramPassword: string;
 
-  @Column({ type: 'datetime', nullable: true })
+  // 加密字段 getter/setter
+  set vpnPassword(value: string | null | undefined) {
+    const encrypted = encryptField(value);
+    this._vpnPassword = encrypted !== null ? encrypted : '';
+  }
+  get vpnPassword(): string {
+    return this._vpnPassword || '';
+  }
+
+  set facebookPassword(value: string | null | undefined) {
+    const encrypted = encryptField(value);
+    this._facebookPassword = encrypted !== null ? encrypted : '';
+  }
+  get facebookPassword(): string {
+    return this._facebookPassword || '';
+  }
+
+  set linkedinPassword(value: string | null | undefined) {
+    const encrypted = encryptField(value);
+    this._linkedinPassword = encrypted !== null ? encrypted : '';
+  }
+  get linkedinPassword(): string {
+    return this._linkedinPassword || '';
+  }
+
+  set whatsappPassword(value: string | null | undefined) {
+    const encrypted = encryptField(value);
+    this._whatsappPassword = encrypted !== null ? encrypted : '';
+  }
+  get whatsappPassword(): string {
+    return this._whatsappPassword || '';
+  }
+
+  set instagramPassword(value: string | null | undefined) {
+    const encrypted = encryptField(value);
+    this._instagramPassword = encrypted !== null ? encrypted : '';
+  }
+  get instagramPassword(): string {
+    return this._instagramPassword || '';
+  }
+
+  @Column({ type: 'timestamp', nullable: true })
   lastLoginAt: Date; // 最后登录时间
 
   @CreateDateColumn()

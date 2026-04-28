@@ -5,6 +5,7 @@ export default {
   people: 'people',
   noEmployees: 'No employee data available',
   noPosition: 'No position set',
+  noDepartment: 'Unassigned Department',
   setReminder: 'Set Reminder',
   targetUser: 'Target User',
   reminderContent: 'Reminder Content',

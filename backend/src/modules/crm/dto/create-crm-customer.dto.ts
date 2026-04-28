@@ -120,4 +120,8 @@ export class CreateCrmCustomerDto {
   @IsString()
   @IsOptional()
   rejectReason?: string;
+
+  @IsInt()
+  @IsOptional()
+  leadId?: number;
 }

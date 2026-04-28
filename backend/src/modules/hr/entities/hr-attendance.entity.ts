@@ -6,7 +6,14 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 
-export type AttendanceStatus = 'present' | 'absent' | 'late' | 'early_leave' | 'leave' | 'overtime';
+export enum AttendanceStatus {
+  PRESENT = 'present',
+  ABSENT = 'absent',
+  LATE = 'late',
+  EARLY_LEAVE = 'early_leave',
+  LEAVE = 'leave',
+  OVERTIME = 'overtime',
+}
 
 @Entity('hr_attendance')
 export class HrAttendance {
@@ -31,7 +38,7 @@ export class HrAttendance {
   @Column({ type: 'time', nullable: true })
   checkOutTime: string;
 
-  @Column({ type: 'varchar', length: 50, default: 'present' })
+  @Column({ type: 'varchar', length: 50, default: AttendanceStatus.PRESENT })
   status: AttendanceStatus;
 
   @Column({ type: 'int', default: 0 })
@@ -48,6 +55,9 @@ export class HrAttendance {
 
   @Column({ nullable: true })
   createdBy: number;
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
 
   @CreateDateColumn()
   createdAt: Date;

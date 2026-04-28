@@ -37,7 +37,7 @@ export class AiLinksController {
       const user = await this.usersService.findById(payload.sub);
       if (!user || !user.isActive) return false;
       if (user.role === 'super_admin') return true;
-      return user.department === 'planning';
+      return user.department === 'brand_center';
     } catch {
       return false;
     }

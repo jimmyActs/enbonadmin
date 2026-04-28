@@ -114,9 +114,12 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column :label="$t('common.operations')" width="150" fixed="right">
+        <el-table-column :label="$t('common.operations')" width="220" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" :icon="Edit" @click="handleEdit(row)" />
+            <el-button type="info" size="small" :icon="Download" @click="handleDownloadPayslip(row)">
+              PDF
+            </el-button>
             <el-button v-if="row.status === 'draft'" type="success" size="small" @click="handleConfirm(row)">
               {{ $t('hr.payroll.confirm') }}
             </el-button>
@@ -232,6 +235,13 @@
         </el-row>
 
         <el-divider content-position="left">{{ $t('hr.payroll.attendanceDeduction') }}</el-divider>
+
+        <div class="attendance-sync-bar">
+          <span class="sync-tip">{{ $t('hr.payroll.attendanceSyncTip') }}</span>
+          <el-button type="primary" plain size="small" :icon="Refresh" :loading="loadingAttendance" @click="handleFetchAttendance">
+            {{ $t('hr.payroll.fetchAttendance') }}
+          </el-button>
+        </div>
 
         <el-row :gutter="20">
           <el-col :span="6">
@@ -391,17 +401,20 @@ import { ref, reactive, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import type { FormInstance } from 'element-plus'
-import { Money, Plus, Edit, Search, Refresh, Setting } from '@element-plus/icons-vue'
+import { Money, Plus, Edit, Search, Refresh, Setting, Download } from '@element-plus/icons-vue'
 import {
   getPayrollList, calculatePayroll, updatePayroll, confirmPayroll,
   getPayrollStats, getPayrollStructures, createPayrollStructure, updatePayrollStructure,
+  getPayrollPayslip,
   type HrPayroll, type HrPayrollStructure,
 } from '../../api/hr'
+import { getAttendanceStats, getAttendanceList } from '../../api/hr'
 
 const { t } = useI18n()
 
 const loading = ref(false)
 const saving = ref(false)
+const loadingAttendance = ref(false)
 const list = ref<HrPayroll[]>([])
 const stats = ref<any>({
   total: 0, totalNetSalary: 0, totalGrossSalary: 0, avgNetSalary: 0, totalDeductions: 0,
@@ -632,6 +645,67 @@ const getStatusText = (status: string): string => {
   return t(`hr.payroll.statuses.${status}`) || status
 }
 
+// 从考勤系统拉取数据
+const handleFetchAttendance = async () => {
+  if (!form.period) {
+    ElMessage.warning(t('hr.payroll.selectPeriodFirst') || '请先选择薪资周期')
+    return
+  }
+  loadingAttendance.value = true
+  try {
+    const [year, month] = form.period.split('-')
+    const startDate = `${year}-${month}-01`
+    const lastDay = new Date(parseInt(year), parseInt(month), 0).getDate()
+    const endDate = `${year}-${month}-${String(lastDay).padStart(2, '0')}`
+
+    // 查询考勤统计
+    const stats = await getAttendanceStats({ startDate, endDate })
+    form.lateCount = stats.late || 0
+    form.earlyLeaveCount = stats.earlyLeave || 0
+    form.absentCount = stats.absent || 0
+    form.overtimeHours = Math.round((stats.totalOvertimeMinutes || 0) / 60)
+
+    // 从考勤记录中获取详情
+    const records = await getAttendanceList({
+      page: 1, pageSize: 100,
+      startDate, endDate,
+      status: 'late',
+    })
+    const lateDays = new Set(records.data.map(r => r.date)).size
+    form.attendanceDeduction = lateDays * 50 // 每次迟到扣50元
+
+    ElMessage.success(
+      t('hr.payroll.attendanceFetched', {
+        late: form.lateCount,
+        early: form.earlyLeaveCount,
+        absent: form.absentCount,
+        deduction: form.attendanceDeduction,
+      }) || `已拉取考勤数据：迟到 ${form.lateCount} 次，早退 ${form.earlyLeaveCount} 次，旷工 ${form.absentCount} 次，扣款 ¥${form.attendanceDeduction}`
+    )
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  } finally {
+    loadingAttendance.value = false
+  }
+}
+
+// 生成工资条 PDF
+const handleDownloadPayslip = async (row: HrPayroll) => {
+  try {
+    const res = await getPayrollPayslip(row.id)
+    const blob = await fetch(`data:application/pdf;base64,${res.buffer}`).then(r => r.blob())
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = res.filename
+    a.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(t('hr.payroll.payslipDownloaded') || '工资条已下载')
+  } catch (error: any) {
+    ElMessage.error(error?.message || t('common.error'))
+  }
+}
+
 onMounted(() => {
   loadData()
   loadStats()
@@ -707,6 +781,13 @@ onMounted(() => {
       justify-content: flex-end;
     }
 
+    :deep(.el-table__inner-wrapper) {
+      width: 100% !important;
+    }
+    :deep(.el-table__body-wrapper) {
+      width: 100% !important;
+    }
+
     .deduction {
       color: #f56c6c;
     }
@@ -742,6 +823,18 @@ onMounted(() => {
         }
       }
     }
+  }
+
+  .attendance-sync-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #ecf5ff;
+    border: 1px solid #409eff;
+    border-radius: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    .sync-tip { font-size: 13px; color: #409eff; }
   }
 
   .structure-header {

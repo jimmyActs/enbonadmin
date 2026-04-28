@@ -59,22 +59,25 @@ api.interceptors.response.use(
       switch (status) {
         case 401:
           // 未授权，清除token并跳转登录页
-          // 但如果是创建文件夹等操作，先显示错误信息
-          const errorMessage = data?.message || '未授权，请重新登录';
+          const errorMessage = data?.message || '登录已过期，请重新登录';
           console.error('401错误:', errorMessage);
-          
-          // 延迟跳转，让错误信息先显示
+
+          // 先显示错误信息，让用户能看清提示内容
+          ElMessage.error(errorMessage);
+
+          // 延迟跳转，确保错误信息有足够时间显示
           setTimeout(() => {
             localStorage.removeItem('token');
             localStorage.removeItem('user');
             window.location.href = '/login';
-          }, 100);
+          }, 1500);
           break;
         case 403:
           console.error('权限不足:', data?.message);
           break;
         case 500:
-          console.error('服务器错误:', data?.message);
+          const apiPath = error.config?.url || 'unknown';
+          console.error(`服务器错误 (${apiPath}):`, data?.message || data?.error?.message);
           break;
         default:
           console.error(data?.message || '请求失败');

@@ -19,9 +19,11 @@ import { CreateCrmShipmentFileDto } from './dto/create-crm-shipment-file.dto';
 import { UpdateCrmShipmentFileDto } from './dto/update-crm-shipment-file.dto';
 import { CreateCrmInquirySourceDto } from './dto/create-crm-inquiry-source.dto';
 import { UpdateCrmInquirySourceDto } from './dto/update-crm-inquiry-source.dto';
-import { UserRole } from '../users/entities/user.entity';
+import { UserRole, OrgRoleType } from '../users/entities/user.entity';
 import { UsersService } from '../users/users.service';
-import { CrmScheduledTaskService } from '../../common/crm-scheduled-task.service';
+import { CrmScheduledTaskService } from './crm-scheduled-task.service';
+import { CrmCustomerChangelogService } from './crm-customer-changelog.service';
+import { EmailService } from '../../common/email/email.service';
 import * as crypto from 'crypto';
 
 // ===================== 工具函数 =====================
@@ -55,6 +57,10 @@ interface CustomerListQuery {
   starRating?: number;
   inquirySource?: string;
   noContactDays?: number; // 超过N天未联系
+  /** 查看范围：self=只看自己, team=看团队, user=看指定成员 */
+  viewScope?: 'self' | 'team' | 'user';
+  /** 当 viewScope=user 时，指定查看的用户ID */
+  targetUserId?: number;
 }
 
 interface LeadListQuery {
@@ -65,7 +71,12 @@ interface LeadListQuery {
   assignedTo?: number;
   keyword?: string;
   country?: string;
+  priority?: string;
   selfOnly?: boolean;
+  /** 查看范围：self=只看自己, team=看团队, user=看指定成员 */
+  viewScope?: 'self' | 'team' | 'user';
+  /** 当 viewScope=user 时，指定查看的用户ID */
+  targetUserId?: number;
 }
 
 interface EmailListQuery {
@@ -97,6 +108,11 @@ interface ShipmentListQuery {
   keyword?: string;
 }
 
+interface ViewScopeParams {
+  viewScope?: 'self' | 'department' | 'user';
+  targetUserId?: number;
+}
+
 // ===================== CRM 服务主体 =====================
 
 @Injectable()
@@ -115,7 +131,10 @@ export class CrmService {
     @InjectRepository(CrmInquirySource)
     private readonly inquirySourceRepo: Repository<CrmInquirySource>,
     private readonly usersService: UsersService,
+    @Inject(forwardRef(() => CrmScheduledTaskService))
     private readonly scheduledTaskService: CrmScheduledTaskService,
+    private readonly emailService: EmailService,
+    private readonly changelogService: CrmCustomerChangelogService,
   ) {}
 
   // ==================== 客户编码生成 ====================
@@ -192,11 +211,15 @@ export class CrmService {
   // ==================== 权限辅助 ====================
 
   private isAdmin(user: any): boolean {
-    return user.role === UserRole.SUPER_ADMIN || user.role === UserRole.DEPARTMENT_HEAD;
+    // 超级管理员（通过 isSuperAdmin 标记或 role 判断）拥有管理员权限
+    return user.isSuperAdmin === true ||
+           user.role === UserRole.SUPER_ADMIN ||
+           user.role === UserRole.DEPARTMENT_HEAD;
   }
 
   private isSales(user: any): boolean {
-    return user.department === 'sales' || user.role === UserRole.SUPER_ADMIN || user.role === UserRole.DEPARTMENT_HEAD;
+    return user.department === 'sales_ops' || user.isSuperAdmin === true ||
+           user.role === UserRole.SUPER_ADMIN || user.role === UserRole.DEPARTMENT_HEAD;
   }
 
   private buildCustomerQb(user: any, query: CustomerListQuery) {
@@ -238,13 +261,24 @@ export class CrmService {
       qb.andWhere('(c.lastContact IS NULL OR c.lastContact < :threshold)', { threshold });
     }
 
-    // 数据权限
+    // 数据权限 - 基于 viewScope 和 targetUserId
     if (!this.isAdmin(user)) {
-      if (query.selfOnly) {
-        // 严格只看自己
-        qb.andWhere('c.ownerId = :ownerId', { ownerId: user.id });
+      const viewScope = query.viewScope || 'self';
+
+      if (viewScope === 'user' && query.targetUserId) {
+        // 查看指定成员的数据
+        qb.andWhere('c.ownerId = :targetUserId', { targetUserId: query.targetUserId });
+      } else if (viewScope === 'team') {
+        // 查看团队数据 - 需要有 crm.stats.team 权限
+        if (user.permissions && user.permissions.includes('crm.stats.team')) {
+          // 查询同一部门的用户
+          qb.andWhere('c.department = :department', { department: user.department });
+        } else {
+          // 没有团队权限，只能看自己
+          qb.andWhere('c.ownerId = :ownerId', { ownerId: user.id });
+        }
       } else {
-        // 普通员工：只看自己（无 selfOnly 时默认安全）
+        // 默认只看自己
         qb.andWhere('c.ownerId = :ownerId', { ownerId: user.id });
       }
     }
@@ -252,6 +286,8 @@ export class CrmService {
     if (query.department && (this.isAdmin(user) || user.department === query.department)) {
       qb.andWhere('c.department = :department', { department: query.department });
     }
+    // 默认只查询未删除记录
+    qb.andWhere('c.isDeleted = :isDeleted', { isDeleted: false });
     return qb;
   }
 
@@ -301,7 +337,9 @@ export class CrmService {
       notes: dto.notes ?? null,
       createdBy: currentUser.id,
     } as any);
-    return this.customerRepo.save(entity as unknown as CrmCustomer);
+    const saved = await this.customerRepo.save(entity as unknown as CrmCustomer);
+    await this.changelogService.logCreate(saved.id, currentUser.id, currentUser.nickname || currentUser.username || '未知');
+    return saved;
   }
 
   async listCustomers(currentUser: any, query: CustomerListQuery) {
@@ -315,11 +353,19 @@ export class CrmService {
       .take(pageSize)
       .getManyAndCount();
 
-    return { data, total, page, pageSize };
+    // 批量解析 ownerId → ownerName
+    const ownerIds = [...new Set(data.filter((c: any) => c.ownerId).map((c: any) => c.ownerId))];
+    const userMap = await this.buildUserMap(ownerIds);
+    const result = data.map((c: any) => ({
+      ...c,
+      ownerName: c.ownerId ? (userMap[c.ownerId] || `#${c.ownerId}`) : null,
+    }));
+
+    return { data: result, total, page, pageSize };
   }
 
   async getCustomer(currentUser: any, id: number): Promise<CrmCustomer> {
-    const c = await this.customerRepo.findOne({ where: { id } });
+    const c = await this.customerRepo.findOne({ where: { id, isDeleted: false } });
     if (!c) throw new NotFoundException('客户不存在');
     // 公海客户任何人都能看；私有客户只有管理员或负责人能看
     if (!c.isInPool && !this.isAdmin(currentUser) && c.ownerId !== currentUser.id) {
@@ -329,7 +375,7 @@ export class CrmService {
   }
 
   async updateCustomer(currentUser: any, id: number, dto: UpdateCrmCustomerDto): Promise<CrmCustomer> {
-    const c = await this.customerRepo.findOne({ where: { id } });
+    const c = await this.customerRepo.findOne({ where: { id, isDeleted: false } });
     if (!c) throw new NotFoundException('客户不存在');
     this.ensureCanModifyCustomer(currentUser, c);
 
@@ -343,8 +389,22 @@ export class CrmService {
       'notes', 'rejectReason', 'lastContact',
     ] as const;
 
+    const oldOwnerId = c.ownerId;
+    const oldOwnerName = c.ownerId ? await this.getUserName(c.ownerId) : '无';
+
     for (const field of fields) {
       if ((dto as any)[field] !== undefined) {
+        const oldVal = (c as any)[field] !== undefined ? String((c as any)[field]) : '';
+        const newVal = String((dto as any)[field]);
+        if (oldVal !== newVal) {
+          await this.changelogService.logUpdate(
+            c.id, field,
+            oldVal || '(空)',
+            newVal || '(空)',
+            currentUser.id,
+            currentUser.nickname || currentUser.username || '未知',
+          );
+        }
         if (field === 'inquiryDate' || field === 'lastContact') {
           (c as any)[field] = (dto as any)[field] ? new Date((dto as any)[field]) : null;
         } else {
@@ -355,6 +415,12 @@ export class CrmService {
 
     // ownerId 变更时更新归属时间
     if ((dto as any).ownerId !== undefined && (dto as any).ownerId !== c.ownerId) {
+      const newOwnerName = (dto as any).ownerId ? await this.getUserName((dto as any).ownerId) : '无';
+      await this.changelogService.logAssignOwner(
+        c.id, oldOwnerId, (dto as any).ownerId,
+        oldOwnerName, newOwnerName,
+        currentUser.id, currentUser.nickname || currentUser.username || '未知',
+      );
       c.ownerId = (dto as any).ownerId;
       c.ownerAssignedAt = new Date();
       // 离开公海
@@ -372,12 +438,13 @@ export class CrmService {
   }
 
   async deleteCustomer(currentUser: any, id: number): Promise<void> {
-    const c = await this.customerRepo.findOne({ where: { id } });
+    const c = await this.customerRepo.findOne({ where: { id, isDeleted: false } });
     if (!c) throw new NotFoundException('客户不存在');
     if (!this.isAdmin(currentUser)) {
       throw new ForbiddenException('只有管理员可以删除客户');
     }
-    await this.customerRepo.remove(c);
+    await this.changelogService.logDelete(id, currentUser.id, currentUser.nickname || currentUser.username || '未知');
+    await this.customerRepo.update(id, { isDeleted: true, deletedAt: new Date() });
   }
 
   // ==================== 客户查重 ====================
@@ -438,6 +505,147 @@ export class CrmService {
 
   // ==================== 公海管理 ====================
 
+  // ==================== 批量操作 ====================
+
+  /** 批量释放客户到公海 */
+  async batchReleaseToPool(currentUser: any, ids: number[], reason: PoolReason): Promise<{ success: number; failed: number }> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以批量释放客户');
+    }
+    const customers = await this.customerRepo.findBy({ id: In(ids) });
+    let success = 0, failed = 0;
+    for (const c of customers) {
+      if (c.isInPool) { failed++; continue; }
+      await this.changelogService.logReleaseToPool(c.id, reason, currentUser.id, currentUser.nickname || currentUser.username || '未知');
+      c.isInPool = true;
+      c.poolReason = reason;
+      c.poolTime = new Date();
+      c.ownerId = null as any;
+      await this.customerRepo.save(c);
+      success++;
+    }
+    return { success, failed };
+  }
+
+  /** 批量删除客户 */
+  async batchDeleteCustomers(currentUser: any, ids: number[]): Promise<{ success: number; failed: number }> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以批量删除客户');
+    }
+    const customers = await this.customerRepo.findBy({ id: In(ids), isDeleted: false });
+    let deleted = 0;
+    for (const c of customers) {
+      await this.changelogService.logDelete(c.id, currentUser.id, currentUser.nickname || currentUser.username || '未知');
+      await this.customerRepo.update(c.id, { isDeleted: true, deletedAt: new Date() });
+      deleted++;
+    }
+    return { success: deleted, failed: ids.length - deleted };
+  }
+
+  // ==================== 回收站 ====================
+
+  /** 获取回收站客户列表（管理员专用） */
+  async listDeletedCustomers(currentUser: any, query: any) {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以查看回收站');
+    }
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const pageSize = Number(query.pageSize) > 0 ? Number(query.pageSize) : 20;
+    const qb = this.customerRepo.createQueryBuilder('c')
+      .andWhere('c.isDeleted = :isDeleted', { isDeleted: true })
+      .orderBy('c.deletedAt', 'DESC');
+
+    if (query.keyword) {
+      qb.andWhere(
+        '(c.customerName ILIKE :kw OR c.customerCode ILIKE :kw)',
+        { kw: `%${query.keyword}%` }
+      );
+    }
+
+    const [data, total] = await qb
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+
+    return { data, total, page, pageSize };
+  }
+
+  /** 从回收站恢复客户 */
+  async restoreCustomer(currentUser: any, id: number): Promise<void> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以恢复客户');
+    }
+    const c = await this.customerRepo.findOne({ where: { id, isDeleted: true } });
+    if (!c) throw new NotFoundException('回收站中不存在此客户');
+    await this.customerRepo.update(id, { isDeleted: false, deletedAt: null });
+  }
+
+  /** 批量从回收站恢复客户 */
+  async batchRestoreCustomers(currentUser: any, ids: number[]): Promise<{ success: number; failed: number }> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以恢复客户');
+    }
+    let restored = 0;
+    for (const id of ids) {
+      const c = await this.customerRepo.findOne({ where: { id, isDeleted: true } });
+      if (c) {
+        await this.customerRepo.update(id, { isDeleted: false, deletedAt: null });
+        restored++;
+      }
+    }
+    return { success: restored, failed: ids.length - restored };
+  }
+
+  /** 永久删除客户（物理删除，仅管理员） */
+  async permanentDeleteCustomer(currentUser: any, id: number): Promise<void> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以永久删除');
+    }
+    const c = await this.customerRepo.findOne({ where: { id, isDeleted: true } });
+    if (!c) throw new NotFoundException('回收站中不存在此客户');
+    await this.customerRepo.remove(c);
+  }
+
+  /** 批量永久删除（物理删除） */
+  async batchPermanentDelete(currentUser: any, ids: number[]): Promise<{ success: number; failed: number }> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以永久删除');
+    }
+    let deleted = 0;
+    for (const id of ids) {
+      const c = await this.customerRepo.findOne({ where: { id, isDeleted: true } });
+      if (c) {
+        await this.customerRepo.remove(c);
+        deleted++;
+      }
+    }
+    return { success: deleted, failed: ids.length - deleted };
+  }
+
+  /** 批量修改客户负责人 */
+  async batchAssignOwner(currentUser: any, ids: number[], ownerId: number): Promise<{ success: number; failed: number }> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员可以批量分配负责人');
+    }
+    const customers = await this.customerRepo.findBy({ id: In(ids) });
+    const newOwnerName = await this.getUserName(ownerId);
+    let success = 0, failed = 0;
+    for (const c of customers) {
+      const oldOwnerName = c.ownerId ? await this.getUserName(c.ownerId) : '无';
+      this.ensureCanModifyCustomer(currentUser, c);
+      await this.changelogService.logAssignOwner(c.id, c.ownerId, ownerId, oldOwnerName, newOwnerName, currentUser.id, currentUser.nickname || currentUser.username || '未知');
+      c.ownerId = ownerId;
+      c.ownerAssignedAt = new Date();
+      c.isInPool = false;
+      c.poolReason = null as any;
+      c.poolTime = null as any;
+      c.lastMaintainAt = new Date();
+      await this.customerRepo.save(c);
+      success++;
+    }
+    return { success, failed };
+  }
+
   /** 主管将客户手动放入公海 */
   async releaseToPool(currentUser: any, id: number, reason: PoolReason): Promise<CrmCustomer> {
     if (!this.isAdmin(currentUser)) {
@@ -446,6 +654,8 @@ export class CrmService {
     const c = await this.customerRepo.findOne({ where: { id } });
     if (!c) throw new NotFoundException('客户不存在');
     if (c.isInPool) return c;
+
+    await this.changelogService.logReleaseToPool(id, reason, currentUser.id, currentUser.nickname || currentUser.username || '未知');
 
     c.isInPool = true;
     c.poolReason = reason;
@@ -478,6 +688,8 @@ export class CrmService {
       if (c.isInPool) throw new BadRequestException('客户已被他人认领，请刷新重试');
       throw new BadRequestException('该客户不在公海中');
     }
+
+    await this.changelogService.logClaimFromPool(id, currentUser.id, currentUser.nickname || currentUser.username || '未知');
 
     return this.customerRepo.findOne({ where: { id } }) as Promise<CrmCustomer>;
   }
@@ -718,6 +930,21 @@ export class CrmService {
     const leads = await leadQb.getMany();
 
     const websiteIds = [...new Set(leads.map((l) => l.websiteId).filter(Boolean))];
+
+    // 如果没有任何带 websiteId 的线索，查询所有询盘来源记录并返回
+    if (websiteIds.length === 0) {
+      const allSources = await this.inquirySourceRepo.find({ order: { createdAt: 'DESC' } });
+      return allSources.map((s) => ({
+        websiteId: s.id,
+        websiteName: s.name || `Website #${s.id}`,
+        websiteType: s.websiteType || 'other',
+        channelName: websiteMap[s.websiteType || 'other'] || s.websiteType || '其他',
+        totalLeads: s.totalInquiries || 0,
+        convertedCustomers: 0,
+        conversionRate: 0,
+      }));
+    }
+
     const sources = await this.inquirySourceRepo.findByIds(websiteIds as number[]);
     const sourceMap: Record<number, any> = {};
     for (const s of sources) { sourceMap[s.id] = s; }
@@ -819,40 +1046,379 @@ export class CrmService {
 
   /** 按负责人统计 */
   async getOwnerStats(currentUser: any, query?: { department?: string }) {
-    // 只有管理员和部门负责人可以看到负责人统计
     const isAdminUser = this.isAdmin(currentUser);
+    const targetDepartment = isAdminUser ? query?.department : currentUser.department;
 
+    // 先获取所有用户，构建 id -> nickname 映射
+    const allUsers = await this.usersService.findAll();
+    const userMap = new Map(allUsers.map((u) => [u.id, u.nickname || u.username]));
+
+    // 获取负责人统计数据（不依赖跨表 join）
     const qb = this.customerRepo
       .createQueryBuilder('c')
-      .leftJoin('users', 'u', 'u.id = c.ownerId')
       .select('c.ownerId', 'ownerId')
-      .addSelect('u.nickname', 'ownerName')
       .addSelect('COUNT(*)', 'totalCount')
       .addSelect('SUM(CASE WHEN c.status = \'closed\' THEN 1 ELSE 0 END)', 'closedCount')
       .addSelect('SUM(CASE WHEN c.dealStatus = \'completed\' THEN CAST(c.actualRevenue AS REAL) ELSE 0 END)', 'totalRevenue')
+      .where('c.ownerId IS NOT NULL')
       .groupBy('c.ownerId')
-      .addGroupBy('u.nickname')
-      .orderBy('totalRevenue', 'DESC');
+      .orderBy('"totalRevenue"', 'DESC');
 
-    // 管理员可看全部或指定部门
-    if (isAdminUser) {
-      if (query?.department) {
-        qb.andWhere('c.department = :department', { department: query.department });
-      }
-    } else {
-      // 部门负责人只看自己部门的
-      qb.andWhere('c.department = :department', { department: currentUser.department });
+    if (targetDepartment) {
+      qb.andWhere('c.department = :department', { department: targetDepartment });
     }
 
     const rows = await qb.getRawMany();
 
     return rows.map((row) => ({
       ownerId: row.ownerId,
-      ownerName: row.ownerName || '未分配',
+      ownerName: userMap.get(row.ownerId) || '未分配',
       totalCount: Number(row.totalCount),
       closedCount: Number(row.closedCount),
       totalRevenue: Number(row.totalRevenue) || 0,
     }));
+  }
+
+  // ==================== 团队看板统计 ====================
+
+  /**
+   * 根据视图范围参数获取 ownerId 列表
+   */
+  private async getViewScopeOwnerIds(
+    params: ViewScopeParams,
+    currentUser: any,
+  ): Promise<number[]> {
+    const { viewScope, targetUserId } = params;
+
+    // 管理员可查看全部
+    const isAdminUser = currentUser.role === UserRole.SUPER_ADMIN;
+
+    if (viewScope === 'user' && targetUserId) {
+      // 指定成员：只看该成员
+      return [targetUserId];
+    }
+
+    if (viewScope === 'self' || !viewScope) {
+      // 我的数据：只看自己
+      return [currentUser.id];
+    }
+
+    if (viewScope === 'department') {
+      // 我的部门：返回同部门所有成员
+      const allUsers = await this.usersService.findAll();
+      const deptMembers = allUsers.filter(u => u.department === currentUser.department && u.isActive);
+      return deptMembers.map((u) => u.id);
+    }
+
+    // 默认返回自己
+    return [currentUser.id];
+  }
+
+  /** 团队 KPI 汇总 */
+  async getTeamKpi(currentUser: any, params?: ViewScopeParams) {
+    const ownerIds = await this.getViewScopeOwnerIds(params || {}, currentUser);
+
+    const [customerCount, leadCount, closedCount, revenueResult] = await Promise.all([
+      this.customerRepo.createQueryBuilder('c')
+        .where('c.ownerId IN (:...ids)', { ids: ownerIds.length > 0 ? ownerIds : [0] })
+        .andWhere('c.isInPool = :isInPool', { isInPool: false })
+        .getCount(),
+      this.leadRepo.createQueryBuilder('l')
+        .where('l.assignedTo IN (:...ids)', { ids: ownerIds.length > 0 ? ownerIds : [0] })
+        .andWhere('l.isInPool = :isInPool', { isInPool: false })
+        .getCount(),
+      this.customerRepo.createQueryBuilder('c')
+        .where('c.ownerId IN (:...ids)', { ids: ownerIds.length > 0 ? ownerIds : [0] })
+        .andWhere('c.dealStatus IN (:...statuses)', { statuses: ['completed', 'delivered'] })
+        .getCount(),
+      this.customerRepo.createQueryBuilder('c')
+        .select('SUM(CAST(c.actualRevenue AS REAL))', 'total')
+        .where('c.ownerId IN (:...ids)', { ids: ownerIds.length > 0 ? ownerIds : [0] })
+        .andWhere('c.dealStatus = :dealStatus', { dealStatus: 'completed' })
+        .getRawOne(),
+    ]);
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const newThisMonth = await this.customerRepo.createQueryBuilder('c')
+      .where('c.ownerId IN (:...ids)', { ids: ownerIds.length > 0 ? ownerIds : [0] })
+      .andWhere('c.createdAt >= :start', { start: startOfMonth })
+      .getCount();
+
+    return {
+      totalCustomers: customerCount,
+      totalLeads: leadCount,
+      closedDeals: closedCount,
+      totalRevenue: Number(revenueResult?.total) || 0,
+      newThisMonth,
+      memberCount: ownerIds.length,
+    };
+  }
+
+  /** 团队成员排名（主管/总监视角） */
+  async getTeamMemberRanking(currentUser: any, params?: ViewScopeParams) {
+    const ownerIds = await this.getViewScopeOwnerIds(params || {}, currentUser);
+
+    // 先获取用户映射
+    const allUsers = await this.usersService.findAll();
+    const userMap = new Map(allUsers.map((u) => [u.id, { nickname: u.nickname, username: u.username }]));
+
+    // 如果是"我自己"视角，只返回当前用户
+    if (params?.viewScope === 'self' || !params?.viewScope) {
+      const user = await this.usersService.findById(currentUser.id);
+      const customerCount = await this.customerRepo.count({
+        where: { ownerId: currentUser.id, isInPool: false },
+      });
+      const closedDeals = await this.customerRepo.count({
+        where: { ownerId: currentUser.id, dealStatus: In(['completed', 'delivered']) },
+      });
+      const revenueResult = await this.customerRepo
+        .createQueryBuilder('c')
+        .select('SUM(CAST(c.actualRevenue AS REAL))', 'total')
+        .where('c.ownerId = :ownerId', { ownerId: currentUser.id })
+        .andWhere('c.dealStatus = :dealStatus', { dealStatus: 'completed' })
+        .getRawOne();
+
+      return [{
+        ownerId: currentUser.id,
+        ownerName: user?.nickname || user?.username || '未知',
+        totalCustomers: customerCount,
+        closedDeals,
+        totalRevenue: Number(revenueResult?.total) || 0,
+        newThisMonth: 0,
+      }];
+    }
+
+    const monthStart = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    const rows = await this.customerRepo
+      .createQueryBuilder('c')
+      .select('c.ownerId', 'ownerId')
+      .addSelect('COUNT(*)', 'totalCount')
+      .addSelect('SUM(CASE WHEN c.status = \'closed\' THEN 1 ELSE 0 END)', 'closedCount')
+      .addSelect('SUM(CASE WHEN c.dealStatus = \'completed\' THEN CAST(c.actualRevenue AS REAL) ELSE 0 END)', 'totalRevenue')
+      .addSelect('SUM(CASE WHEN c.createdAt >= :monthStart THEN 1 ELSE 0 END)', 'newThisMonth')
+      .setParameter('monthStart', monthStart)
+      .where('c.ownerId IN (:...ids)', { ids: ownerIds.length > 0 ? ownerIds : [0] })
+      .andWhere('c.isInPool = :isInPool', { isInPool: false })
+      .groupBy('c.ownerId')
+      .orderBy('"totalRevenue"', 'DESC')
+      .getRawMany();
+
+    return rows.map((row) => {
+      const userInfo = userMap.get(row.ownerId) || { nickname: null, username: null };
+      return {
+        ownerId: row.ownerId,
+        ownerName: userInfo.nickname || userInfo.username || '未知',
+        totalCustomers: Number(row.totalCount),
+        closedDeals: Number(row.closedCount),
+        totalRevenue: Number(row.totalRevenue) || 0,
+        newThisMonth: Number(row.newThisMonth),
+      };
+    });
+  }
+
+  /** 团队漏斗统计 */
+  async getTeamFunnel(currentUser: any, params?: ViewScopeParams) {
+    const ownerIds = await this.getViewScopeOwnerIds(params || {}, currentUser);
+
+    const stages = await this.customerRepo
+      .createQueryBuilder('c')
+      .select('c.status', 'status')
+      .addSelect('COUNT(*)', 'count')
+      .where('c.ownerId IN (:...ids)', { ids: ownerIds.length > 0 ? ownerIds : [0] })
+      .andWhere('c.isInPool = :isInPool', { isInPool: false })
+      .groupBy('c.status')
+      .getRawMany();
+
+    const stageMap: Record<string, string> = {
+      new: '新建',
+      contacting: '跟进中',
+      negotiating: '谈判中',
+      closed: '已成交',
+    };
+
+    return stages.map((row) => ({
+      status: row.status,
+      label: stageMap[row.status] || row.status,
+      count: Number(row.count),
+    }));
+  }
+
+  /**
+   * 获取当前用户可查看的团队成员列表
+   * 用于数据查看切换器的"指定成员"选择
+   */
+  async getSelectableTeamMembers(currentUser: any) {
+    // 非管理员或无团队权限，只能看自己
+    if (!this.isAdmin(currentUser) && (!currentUser.permissions || !currentUser.permissions.includes('crm.stats.team'))) {
+      return [{
+        id: currentUser.id,
+        nickname: currentUser.nickname || currentUser.username,
+        username: currentUser.username,
+        department: currentUser.department,
+      }];
+    }
+
+    // 获取同部门的团队成员
+    const users = await this.usersService.findAll();
+    const teamMembers = users.filter((u: any) => {
+      // 同部门且在职
+      return u.department === currentUser.department && u.isActive !== false;
+    });
+
+    return teamMembers.map((u: any) => ({
+      id: u.id,
+      nickname: u.nickname || u.username,
+      username: u.username,
+      department: u.department,
+      position: u.position,
+    }));
+  }
+
+  /**
+   * 内部方法：获取范围内的 ownerId 列表
+   * @param scope 数据范围
+   * @param department 可选的部门过滤
+   * @param currentUserId 当前用户ID（用于 self 范围）
+   */
+  private async getScopeOwnerIds(scope: { scope: 'all' | 'department' | 'self'; department?: string }, department?: string, currentUserId?: number): Promise<number[]> {
+    if (scope.scope === 'self') {
+      // 普通员工只能看自己
+      return currentUserId ? [currentUserId] : [];
+    }
+
+    const users = await this.usersService.findAll();
+    const filtered = users.filter((u: any) => {
+      if (scope.scope === 'all') return true;
+      if (scope.scope === 'department') {
+        const dept = department || scope.department;
+        return u.department === dept;
+      }
+      return false;
+    });
+
+    return filtered.map((u: any) => u.id);
+  }
+
+  // ==================== 线索公海池 ====================
+
+  /** 公海商机列表（只查 isInPool=true 且非管理员可见的） */
+  async listLeadPool(currentUser: any, query: LeadListQuery) {
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const pageSize = Number(query.pageSize) > 0 ? Number(query.pageSize) : 20;
+    const qb = this.leadRepo.createQueryBuilder('l');
+
+    qb.andWhere('l.isInPool = :isInPool', { isInPool: true });
+
+    if (query.keyword) {
+      const kw = `%${query.keyword}%`;
+      qb.andWhere('(l.contactName LIKE :kw OR l.companyName LIKE :kw OR l.inquiryContent LIKE :kw)', { kw });
+    }
+    if (query.source) qb.andWhere('l.source = :source', { source: query.source });
+    if (query.country) qb.andWhere('l.country = :country', { country: query.country });
+    if (query.priority) qb.andWhere('l.priority = :priority', { priority: query.priority });
+
+    qb.orderBy('l.poolTime', 'DESC');
+
+    const [data, total] = await qb
+      .skip((page - 1) * pageSize)
+      .take(pageSize)
+      .getManyAndCount();
+
+    return { data, total, page, pageSize };
+  }
+
+  /** 认领公海商机 */
+  async claimFromLeadPool(currentUser: any, id: number): Promise<CrmLead> {
+    const lead = await this.leadRepo.findOne({ where: { id, isInPool: true } });
+    if (!lead) throw new NotFoundException('公海商机不存在或已被认领');
+
+    lead.assignedTo = currentUser.id;
+    lead.assignedAt = new Date();
+    lead.isInPool = false;
+    lead.poolReason = null;
+    lead.poolTime = null;
+    lead.status = LeadStatus.QUALIFIED;
+
+    return this.leadRepo.save(lead);
+  }
+
+  /** 释放商机到公海 */
+  async releaseToLeadPool(currentUser: any, id: number, reason: string): Promise<CrmLead> {
+    const lead = await this.leadRepo.findOne({ where: { id } });
+    if (!lead) throw new NotFoundException('商机不存在');
+    if (lead.isInPool) throw new BadRequestException('该商机已在公海');
+
+    // 主管可强制释放任意商机，销售只能释放自己的
+    if (!this.isAdmin(currentUser) && lead.assignedTo !== currentUser.id) {
+      throw new ForbiddenException('无权释放该商机');
+    }
+
+    lead.assignedTo = null;
+    lead.assignedAt = null;
+    lead.isInPool = true;
+    lead.poolReason = reason;
+    lead.poolTime = new Date();
+
+    return this.leadRepo.save(lead);
+  }
+
+  /** 定时任务：自动将 N 天未跟进的商机放入公海 */
+  async autoReleaseLeadsToPool(days: number = 7): Promise<number> {
+    const threshold = new Date();
+    threshold.setDate(threshold.getDate() - days);
+
+    const result = await this.leadRepo
+      .createQueryBuilder('l')
+      .andWhere('l.isInPool = :isInPool', { isInPool: false })
+      .andWhere('l.assignedTo IS NOT NULL')
+      .andWhere('l.status IN (:...statuses)', {
+        statuses: [LeadStatus.NEW, LeadStatus.QUALIFIED],
+      })
+      .andWhere('(l.lastFollowUpAt IS NULL OR l.lastFollowUpAt < :threshold)', { threshold })
+      .update(CrmLead)
+      .set({
+        isInPool: true,
+        poolReason: 'auto_pool',
+        poolTime: new Date(),
+        assignedTo: null as any,
+        assignedAt: null as any,
+      })
+      .execute();
+
+    return result.affected || 0;
+  }
+
+  /** 一键自动分配公海商机（主管权限，按国家/来源轮询分配） */
+  async autoAssignLeadPool(currentUser: any): Promise<{ assigned: number; remaining: number }> {
+    if (!this.isAdmin(currentUser)) throw new ForbiddenException('只有管理员可以执行自动分配');
+
+    // 获取所有未分配的商机
+    const unassignedLeads = await this.leadRepo.find({ where: { isInPool: true } });
+    if (unassignedLeads.length === 0) return { assigned: 0, remaining: 0 };
+
+    // 获取所有销售（按国家分配偏好等，简单用 round-robin）
+    const sales = await this.usersService.findAll();
+    const salesUsers = sales.filter(s => s.role !== 'hr' && s.role !== 'guest');
+
+    if (salesUsers.length === 0) return { assigned: 0, remaining: unassignedLeads.length };
+
+    let assignedCount = 0;
+    for (let i = 0; i < unassignedLeads.length; i++) {
+      const lead = unassignedLeads[i];
+      const targetUser = salesUsers[i % salesUsers.length];
+
+      lead.assignedTo = targetUser.id;
+      lead.assignedAt = new Date();
+      lead.isInPool = false;
+      lead.poolReason = null;
+      lead.poolTime = null;
+
+      await this.leadRepo.save(lead);
+      assignedCount++;
+    }
+
+    return { assigned: assignedCount, remaining: unassignedLeads.length - assignedCount };
   }
 
   // ==================== 商机管理 ====================
@@ -894,9 +1460,29 @@ export class CrmService {
     if (query.assignedTo) qb.andWhere('l.assignedTo = :assignedTo', { assignedTo: query.assignedTo });
     if (query.country) qb.andWhere('l.country = :country', { country: query.country });
 
-    // 非管理员只看自己的商机
+    // 常规商机列表排除公海商机
+    qb.andWhere('l.isInPool = :isInPool', { isInPool: false });
+
+    // 数据权限 - 基于 viewScope 和 targetUserId
     if (!this.isAdmin(currentUser)) {
-      qb.andWhere('l.assignedTo = :ownerId', { ownerId: currentUser.id });
+      const viewScope = query.viewScope || 'self';
+
+      if (viewScope === 'user' && query.targetUserId) {
+        // 查看指定成员的数据
+        qb.andWhere('l.assignedTo = :targetUserId', { targetUserId: query.targetUserId });
+      } else if (viewScope === 'team') {
+        // 查看团队数据 - 需要有 crm.stats.team 权限
+        if (currentUser.permissions && currentUser.permissions.includes('crm.stats.team')) {
+          // 查询同一部门的用户
+          qb.andWhere('l.department = :department', { department: currentUser.department });
+        } else {
+          // 没有团队权限，只能看自己
+          qb.andWhere('l.assignedTo = :ownerId', { ownerId: currentUser.id });
+        }
+      } else {
+        // 默认只看自己
+        qb.andWhere('l.assignedTo = :ownerId', { ownerId: currentUser.id });
+      }
     }
 
     qb.orderBy('l.updatedAt', 'DESC');
@@ -906,13 +1492,76 @@ export class CrmService {
       .take(pageSize)
       .getManyAndCount();
 
-    return { data, total, page, pageSize };
+    // 批量解析 assignedTo → assignedToName
+    const assignedIds = [...new Set(data.filter((l: any) => l.assignedTo).map((l: any) => l.assignedTo))];
+    const userMap = await this.buildUserMap(assignedIds);
+    const result = data.map((l: any) => ({
+      ...l,
+      assignedToName: l.assignedTo ? (userMap[l.assignedTo] || `#${l.assignedTo}`) : null,
+    }));
+
+    return { data: result, total, page, pageSize };
   }
 
   async getLead(currentUser: any, id: number): Promise<CrmLead> {
     const lead = await this.leadRepo.findOne({ where: { id } });
     if (!lead) throw new NotFoundException('商机不存在');
     return lead;
+  }
+
+  /** 待分配询盘列表：isInPool=true 且有分配权限的人才能看到 */
+  async listPendingLeads(currentUser: any, query: {
+    page?: number; pageSize?: number; keyword?: string; source?: string; country?: string
+  }) {
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const pageSize = Number(query.pageSize) > 0 ? Number(query.pageSize) : 20;
+    const qb = this.leadRepo.createQueryBuilder('l');
+
+    if (query.keyword) {
+      const kw = `%${query.keyword}%`;
+      qb.andWhere('(l.contactName LIKE :kw OR l.companyName LIKE :kw OR l.email LIKE :kw OR l.phone LIKE :kw)', { kw });
+    }
+    if (query.source) qb.andWhere('l.source = :source', { source: query.source });
+    if (query.country) qb.andWhere('l.country = :country', { country: query.country });
+
+    // 只显示公海中的商机（待分配）
+    qb.andWhere('l.isInPool = :isInPool', { isInPool: true });
+
+    const total = await qb.getCount();
+    qb.orderBy('l.createdAt', 'DESC')
+      .skip((page - 1) * pageSize)
+      .take(pageSize);
+
+    const leads = await qb.getMany();
+
+    const users = await this.usersService.findAll();
+    const userMap: Record<number, string> = {};
+    users.forEach(u => { userMap[u.id] = u.nickname || u.username; });
+
+    const result = leads.map(l => ({
+      ...l,
+      assignedToName: l.assignedTo ? (userMap[l.assignedTo] || `#${l.assignedTo}`) : null,
+    }));
+
+    return { data: result, total, page, pageSize };
+  }
+
+  /** 分配商机给指定负责人（仅管理员可操作） */
+  async assignLead(currentUser: any, id: number, assignedTo: number | null): Promise<CrmLead> {
+    if (!this.isAdmin(currentUser)) {
+      throw new ForbiddenException('只有管理员或拥有分配权限的人可以分配商机');
+    }
+
+    const lead = await this.leadRepo.findOne({ where: { id } });
+    if (!lead) throw new NotFoundException('商机不存在');
+
+    lead.assignedTo = assignedTo;
+    lead.assignedAt = new Date();
+    lead.isInPool = false;
+    lead.poolReason = null;
+    lead.lastFollowUpAt = new Date();
+
+    return this.leadRepo.save(lead);
   }
 
   async updateLead(currentUser: any, id: number, dto: UpdateCrmLeadDto): Promise<CrmLead> {
@@ -945,9 +1594,18 @@ export class CrmService {
     await this.leadRepo.remove(lead);
   }
 
-  /** 商机转客户 */
+  /**
+   * 商机转客户（带悲观锁，防止重复转化）
+   * 使用 SELECT ... FOR UPDATE 确保并发请求不会重复计 数
+   */
   async convertLeadToCustomer(currentUser: any, leadId: number, customerData?: Partial<CreateCrmCustomerDto>): Promise<CrmCustomer> {
-    const lead = await this.leadRepo.findOne({ where: { id: leadId } });
+    // 悲观锁：锁定商机行，防止并发重复转化
+    const lead = await this.leadRepo
+      .createQueryBuilder('lead')
+      .setLock('pessimistic_write')
+      .where('lead.id = :id', { id: leadId })
+      .getOne();
+
     if (!lead) throw new NotFoundException('商机不存在');
     if (lead.status === LeadStatus.CONVERTED || lead.status === LeadStatus.LOST) {
       throw new BadRequestException('该商机已转化或流失');
@@ -964,6 +1622,7 @@ export class CrmService {
     dto.inquiryDate = lead.createdAt?.toISOString() ?? undefined;
     dto.notes = lead.notes ?? undefined;
     dto.ownerId = lead.assignedTo ?? undefined;
+    dto.leadId = leadId;
 
     if (customerData) {
       Object.assign(dto, customerData);
@@ -1043,6 +1702,47 @@ export class CrmService {
       emailDate: dto.emailDate ? new Date(dto.emailDate) : new Date(),
     } as any);
     return this.emailRepo.save(entity as unknown as CrmEmail);
+  }
+
+  async sendEmail(
+    currentUser: any,
+    body: {
+      to: string; cc?: string; subject: string; body: string;
+      attachments?: { filename: string; size: number; url: string }[];
+    },
+  ): Promise<CrmEmail> {
+    if (!body.to) throw new BadRequestException('收件人不能为空');
+    if (!body.subject?.trim()) throw new BadRequestException('邮件主题不能为空');
+
+    const hasAttachments = !!(body.attachments && body.attachments.length > 0);
+
+    // 创建出站邮件记录
+    const email = this.emailRepo.create({
+      messageId: `outbound-${Date.now()}@enboncrm`,
+      subject: body.subject,
+      bodyText: body.body,
+      bodyPreview: body.body.substring(0, 200),
+      fromEmail: currentUser.email || 'noreply@enboncrm',
+      fromName: currentUser.nickname || currentUser.username,
+      toRecipients: body.to,
+      ccRecipients: body.cc || null,
+      direction: 'outbound',
+      isRead: true,
+      ownerId: currentUser.id,
+      emailDate: new Date(),
+      hasAttachments,
+      attachments: hasAttachments ? JSON.stringify(body.attachments) : null,
+    } as any);
+    const saved = await this.emailRepo.save(email as unknown as CrmEmail);
+
+    // TODO: 实际调用邮件发送服务 (SMTP/Nodemailer) 发送邮件
+    await this.emailService.send({ to: body.to, cc: body.cc, subject: body.subject, html: body.body });
+
+    return saved;
+  }
+
+  async markEmailRead(currentUser: any, id: number): Promise<void> {
+    await this.emailRepo.update(id, { isRead: true });
   }
 
   async listEmails(currentUser: any, query: EmailListQuery) {
@@ -1420,5 +2120,22 @@ export class CrmService {
 
   private async findSalesUser(userId: number): Promise<any> {
     return this.usersService.findById(userId);
+  }
+
+  private async getUserName(userId: number): Promise<string> {
+    const user = await this.usersService.findById(userId);
+    return user?.nickname || user?.username || `用户#${userId}`;
+  }
+
+  /** 批量构建 userId → displayName 的映射表 */
+  private async buildUserMap(userIds: number[]): Promise<Record<number, string>> {
+    if (!userIds.length) return {};
+    const allUsers = await this.usersService.findAll();
+    const filtered = allUsers.filter((u: any) => userIds.includes(u.id));
+    const map: Record<number, string> = {};
+    filtered.forEach((u: any) => {
+      map[u.id] = u.nickname || u.username || `用户#${u.id}`;
+    });
+    return map;
   }
 }

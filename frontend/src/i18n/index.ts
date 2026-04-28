@@ -8,11 +8,15 @@ const savedLocale = localStorage.getItem('locale') || 'zh-CN'
 const i18n = createI18n({
   legacy: false, // 使用Composition API模式
   locale: savedLocale,
-  fallbackLocale: 'zh-CN',
+  fallbackLocale: ['zh-CN', 'zh'], // 多级回退：先找 zh-CN，再找 zh，最后用第一个
   messages: {
     'zh-CN': zhCN,
-    'en-US': enUS
-  }
+    'zh': zhCN, // 兼容简写（指向同一对象）
+    'en-US': enUS,
+    'en': enUS, // 兼容简写（指向同一对象）
+  },
+  missingWarn: false,
+  fallbackWarn: false,
 })
 
 export default i18n

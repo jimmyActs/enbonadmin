@@ -45,15 +45,10 @@ export class EmployeesService {
         'workStatus',
         'mood',
         'vpnAccount', // VPN 登录账号
-        'vpnPassword', // VPN 登录密码
         'facebookAccount', // Facebook 公司账号
-        'facebookPassword', // Facebook 公司账号密码
         'linkedinAccount', // LinkedIn 公司账号
-        'linkedinPassword', // LinkedIn 公司账号密码
         'whatsappAccount', // WhatsApp 公司账号
-        'whatsappPassword', // WhatsApp 公司账号密码
         'instagramAccount', // Instagram 公司账号
-        'instagramPassword', // Instagram 公司账号密码
         'lastLoginAt',
         'createdAt',
         'updatedAt',
@@ -126,15 +121,10 @@ export class EmployeesService {
         'workStatus',
         'mood',
         'vpnAccount', // VPN 登录账号
-        'vpnPassword', // VPN 登录密码
         'facebookAccount', // Facebook 公司账号
-        'facebookPassword', // Facebook 公司账号密码
         'linkedinAccount', // LinkedIn 公司账号
-        'linkedinPassword', // LinkedIn 公司账号密码
         'whatsappAccount', // WhatsApp 公司账号
-        'whatsappPassword', // WhatsApp 公司账号密码
         'instagramAccount', // Instagram 公司账号
-        'instagramPassword', // Instagram 公司账号密码
         'lastLoginAt',
         'createdAt',
         'updatedAt',
@@ -283,15 +273,10 @@ export class EmployeesService {
         'workStatus',
         'mood',
         'vpnAccount', // VPN 登录账号
-        'vpnPassword', // VPN 登录密码
         'facebookAccount', // Facebook 公司账号
-        'facebookPassword', // Facebook 公司账号密码
         'linkedinAccount', // LinkedIn 公司账号
-        'linkedinPassword', // LinkedIn 公司账号密码
         'whatsappAccount', // WhatsApp 公司账号
-        'whatsappPassword', // WhatsApp 公司账号密码
         'instagramAccount', // Instagram 公司账号
-        'instagramPassword', // Instagram 公司账号密码
         'lastLoginAt',
         'createdAt',
         'updatedAt',
@@ -443,6 +428,7 @@ export class EmployeesService {
 
   /**
    * 按部门分组获取员工（过滤离职员工）
+   * 修复：没有部门的员工归入 'unassigned'（未分配部门），不再归入总经办
    */
   async getEmployeesByDepartment(): Promise<Record<string, Omit<User, 'password'>[]>> {
     const employees = await this.findAll();
@@ -453,13 +439,13 @@ export class EmployeesService {
       if (employee.employmentStatus === EmploymentStatus.RESIGNED) {
         return;
       }
-      
-      if (employee.department) {
-        if (!grouped[employee.department]) {
-          grouped[employee.department] = [];
-        }
-        grouped[employee.department].push(employee);
+
+      // 如果没有部门，归入 'unassigned'（未分配部门）
+      const dept = employee.department || 'unassigned';
+      if (!grouped[dept]) {
+        grouped[dept] = [];
       }
+      grouped[dept].push(employee);
     });
 
     return grouped;

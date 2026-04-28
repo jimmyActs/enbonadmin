@@ -249,20 +249,112 @@ export class ExcelImportService {
 
   // ==================== HR 员工花名册导入 ====================
 
+  // 部门映射（中文名 → 代码）
+  private readonly DEPT_MAP: Record<string, string> = {
+    '总经办': 'general_office',
+    '人力资源中心': 'hr_center', '人力资源': 'hr_center', '人资': 'hr_center', 'HR': 'hr_center',
+    '财务管理中心': 'finance_center', '财务': 'finance_center',
+    '品牌管理中心': 'brand_center', '品牌': 'brand_center',
+    '交付管理中心': 'delivery_center', '交付': 'delivery_center',
+    '研发中心': 'rd_center', '研发': 'rd_center',
+    '销售运营中心': 'sales_ops', '销售': 'sales_ops',
+  };
+
+  // 小组/战区映射（中文名 → 代码）
+  private readonly TEAM_MAP: Record<string, string> = {
+    '日韩运营组': 'ops_jk', '日韩组': 'ops_jk', '日韩': 'ops_jk',
+    '印度运营组': 'ops_india', '印度组': 'ops_india', '印度': 'ops_india',
+    '中东运营组': 'ops_me', '中东组': 'ops_me', '中东': 'ops_me',
+    '欧亚运营组': 'ops_ea', '欧亚组': 'ops_ea', '欧亚': 'ops_ea',
+    '巴伊运营组': 'ops_bay', '巴伊组': 'ops_bay', '巴伊': 'ops_bay',
+  };
+
+  // 职位代码映射（中文名 → 代码）
+  // 按部门区分，避免同名职位冲突
+  private readonly POSITION_MAP: Record<string, Record<string, string>> = {
+    // 总经办
+    '董事长': { '*': 'chairman', '总经办': 'chairman' },
+    '总经理': { '*': 'ceo', '总经办': 'ceo' },
+    // 人力资源中心
+    '人资总监': { '*': 'hr_director', '人力资源中心': 'hr_director' },
+    '人事行政前台': { '*': 'hr_front_desk', '人力资源中心': 'hr_front_desk' },
+    '招聘人事专员': { '*': 'hr_recruiter', '人力资源中心': 'hr_recruiter' },
+    '行政人事专员': { '*': 'hr_admin', '人力资源中心': 'hr_admin' },
+    '保洁': { '*': 'hr_cleaner', '人力资源中心': 'hr_cleaner' },
+    '文员': { '*': 'hr_clerk', '人力资源中心': 'hr_clerk' },
+    'HRBP（试用期）': { '*': 'hr_bp_probation', '人力资源中心': 'hr_bp_probation' },
+    // 财务管理中心
+    '财务总监': { '*': 'finance_director', '财务管理中心': 'finance_director' },
+    '会计': { '*': 'accountant', '财务管理中心': 'accountant' },
+    '财务专员': { '*': 'finance_specialist', '财务管理中心': 'finance_specialist' },
+    '沙特财务专员': { '*': 'finance_saudi', '财务管理中心': 'finance_saudi' },
+    // 品牌管理中心
+    '品牌策划总监': { '*': 'brand_director', '品牌管理中心': 'brand_director' },
+    '企划部主管': { '*': 'brand_planner_leader', '品牌管理中心': 'brand_planner_leader' },
+    'WEB前端': { '*': 'web_front_end', '品牌管理中心': 'web_front_end' },
+    '运营助理': { '*': 'operations_assistant', '品牌管理中心': 'operations_assistant' },
+    '新媒体运营': { '*': 'new_media_ops', '品牌管理中心': 'new_media_ops' },
+    '平面设计师': { '*': 'graphic_designer', '品牌管理中心': 'graphic_designer' },
+    '平面设计助理': { '*': 'graphic_designer_asst', '品牌管理中心': 'graphic_designer_asst' },
+    '3D动画设计师': { '*': '3d_animator', '品牌管理中心': '3d_animator' },
+    '社交媒体经理': { '*': 'social_media_mgr', '品牌管理中心': 'social_media_mgr' },
+    // 交付管理中心
+    '副总经理': { '*': 'delivery_vp', '交付管理中心': 'delivery_vp' },
+    '品质主管': { '*': 'quality_supervisor', '交付管理中心': 'quality_supervisor' },
+    '品质专员': { '*': 'quality_specialist', '交付管理中心': 'quality_specialist' },
+    '技术主管': { '*': 'tech_supervisor', '交付管理中心': 'tech_supervisor' },
+    'LED结构工程师': { '*': 'led_struct_engineer', '交付管理中心': 'led_struct_engineer' },
+    '仓管专员': { '*': 'warehouse_specialist', '交付管理中心': 'warehouse_specialist' },
+    '采购专员': { '*': 'procurement_specialist', '交付管理中心': 'procurement_specialist' },
+    'PMC主管': { '*': 'pmc_supervisor', '交付管理中心': 'pmc_supervisor' },
+    'PMC专员': { '*': 'pmc_specialist', '交付管理中心': 'pmc_specialist' },
+    '售后工程师': { '交付管理中心': 'after_sales_engineer', '销售运营中心': 'sales_after_sales' },
+    '售后助理工程师': { '*': 'after_sales_asst', '交付管理中心': 'after_sales_asst' },
+    '沙特仓管': { '*': 'saudi_warehouse', '交付管理中心': 'saudi_warehouse' },
+    '国际售后工程师': { '交付管理中心': 'intl_after_sales', '销售运营中心': 'sales_intl_after_sales' },
+    // 研发中心
+    '研发总监': { '*': 'rd_director', '研发中心': 'rd_director' },
+    '结构工程师': { '*': 'structural_engineer', '研发中心': 'structural_engineer' },
+    '电子工程师': { '*': 'electronic_engineer', '研发中心': 'electronic_engineer' },
+    '工程师助理': { '*': 'engineer_asst', '研发中心': 'engineer_asst' },
+    // 销售运营中心
+    '销售总监': { '*': 'sales_director', '销售运营中心': 'sales_director' },
+    '销售主管': { '*': 'sales_supervisor', '销售运营中心': 'sales_supervisor' },
+    '海外销售': { '*': 'sales_overseas', '销售运营中心': 'sales_overseas' },
+    '外贸跟单': { '*': 'sales_merchandiser', '销售运营中心': 'sales_merchandiser' },
+    '日语跟单': { '*': 'sales_japanese_merch', '销售运营中心': 'sales_japanese_merch' },
+    '阿里运营专员': { '*': 'sales_ali_ops', '销售运营中心': 'sales_ali_ops' },
+    '售后经理': { '*': 'sales_after_sales_mgr', '销售运营中心': 'sales_after_sales_mgr' },
+    '常驻海外销售': { '*': 'sales_resident', '销售运营中心': 'sales_resident' },
+    '销售组长': { '*': 'sales_leader', '销售运营中心': 'sales_leader' },
+    '售后组长': { '*': 'sales_after_sales_lead', '销售运营中心': 'sales_after_sales_lead' },
+  };
+
   private readonly EMPLOYEE_FIELDS: FieldMap = {
-    '用户名': 'username', '用户': 'username', '姓名': 'username', '昵称': 'nickname',
-    '部门': 'department', '所属部门': 'department',
-    '职位': 'position', '岗位': 'position',
-    '手机': 'phone', '电话': 'phone',
-    '邮箱': 'email', '电子邮件': 'email',
+    // 必填
+    '用户名': 'username',
+    // 基本信息
+    '姓名': 'nickname', '昵称': 'nickname', '姓名/昵称': 'nickname',
+    '密码': 'password',
     '性别': 'gender',
-    '入职日期': 'hireDate', '入职时间': 'hireDate',
-    '状态': 'employmentStatus', '在职状态': 'employmentStatus',
+    '年龄': 'age',
+    '邮箱': 'email',
+    '电话': 'phone', '手机': 'phone',
+    '毕业院校': 'school', '院校': 'school',
+    // 架构字段
+    '部门': 'department', '所属部门': 'department', '部门名称': 'department',
+    '职位': 'position', '岗位': 'position', '职位名称': 'position',
+    '小组': 'team', '小组/战区': 'team', '战区': 'team',
+    '组织角色': 'orgRoleType',
+    // 在职信息
+    '入职日期': 'hireDate', '入职时间': 'hireDate', '入职': 'hireDate',
+    '在职状态': 'employmentStatus', '状态': 'employmentStatus',
   };
 
   private readonly GENDER_MAP: Record<string, string> = {
     '男': 'male', '男性': 'male', 'M': 'male',
     '女': 'female', '女性': 'female', 'F': 'female',
+    '其他': 'other', '保密': 'other',
   };
 
   private readonly STATUS_MAP: Record<string, string> = {
@@ -272,27 +364,203 @@ export class ExcelImportService {
     '停职': 'suspended', 'suspended': 'suspended',
   };
 
+  private readonly ORG_ROLE_MAP: Record<string, string> = {
+    '普通成员': 'staff', '普通员工': 'staff', '成员': 'staff', 'staff': 'staff',
+    '小组负责人': 'team_lead', '组长': 'team_lead', 'team_lead': 'team_lead',
+    '部门负责人': 'dept_manager', '负责人': 'dept_manager', 'dept_manager': 'dept_manager',
+  };
+
+  /**
+   * 解析职位代码
+   * @param positionName 职位中文名
+   * @param deptName 部门中文名（用于消除同名歧义）
+   */
+  private resolvePosition(positionName: string, deptName: string): string | null {
+    if (!positionName) return null;
+    const name = positionName.trim();
+    const dept = deptName?.trim() || '';
+
+    const posGroup = this.POSITION_MAP[name];
+    if (!posGroup) return name; // 直接返回原文（可能是代码）
+
+    // 优先匹配部门，其次用通用
+    return posGroup[dept] || posGroup['*'] || name;
+  }
+
+  /**
+   * 解析小组代码
+   */
+  private resolveTeam(teamName: string): string | null {
+    if (!teamName) return null;
+    return this.TEAM_MAP[teamName.trim()] || teamName.trim();
+  }
+
+  /**
+   * 生成员工花名册导入模板
+   * 包含【填写说明】【部门代码参考】【职位代码参考】【小组战区参考】【员工数据】5个Sheet
+   */
   async generateHrEmployeesTemplate(): Promise<Buffer> {
-    const headers = [
-      '用户名', '姓名', '部门', '职位', '手机', '邮箱',
-      '性别', '入职日期', '状态',
+    // Sheet 1: 填写说明
+    // Sheet 2: 部门代码参考
+    // Sheet 3: 职位代码参考
+    // Sheet 4: 小组/战区代码参考
+    // Sheet 5: 员工数据
+
+    const deptHeaders = ['部门中文名', '部门代码'];
+    const deptData = [
+      ['总经办', 'general_office'],
+      ['人力资源中心', 'hr_center'],
+      ['财务管理中心', 'finance_center'],
+      ['品牌管理中心', 'brand_center'],
+      ['交付管理中心', 'delivery_center'],
+      ['研发中心', 'rd_center'],
+      ['销售运营中心', 'sales_ops'],
     ];
-    const sampleRows = [
-      ['zhangsan', '张三', '销售部', '销售经理', '13800138000', 'zhang@company.com',
-       '男', '2025-01-15', '在职'],
-      ['lisi', '李四', '技术部', '工程师', '13900139000', 'li@company.com',
-       '女', '2025-03-01', '在职'],
+
+    const posHeaders = ['部门中文名', '职位中文名', '职位代码'];
+    const posData = [
+      // 总经办
+      ['总经办', '董事长', 'chairman'],
+      ['总经办', '总经理', 'ceo'],
+      // 人力资源中心
+      ['人力资源中心', '人资总监', 'hr_director'],
+      ['人力资源中心', '人事行政前台', 'hr_front_desk'],
+      ['人力资源中心', '招聘人事专员', 'hr_recruiter'],
+      ['人力资源中心', '行政人事专员', 'hr_admin'],
+      ['人力资源中心', '保洁', 'hr_cleaner'],
+      ['人力资源中心', '文员', 'hr_clerk'],
+      ['人力资源中心', 'HRBP（试用期）', 'hr_bp_probation'],
+      // 财务管理中心
+      ['财务管理中心', '财务总监', 'finance_director'],
+      ['财务管理中心', '会计', 'accountant'],
+      ['财务管理中心', '财务专员', 'finance_specialist'],
+      ['财务管理中心', '沙特财务专员', 'finance_saudi'],
+      // 品牌管理中心
+      ['品牌管理中心', '品牌策划总监', 'brand_director'],
+      ['品牌管理中心', '企划部主管', 'brand_planner_leader'],
+      ['品牌管理中心', 'WEB前端', 'web_front_end'],
+      ['品牌管理中心', '运营助理', 'operations_assistant'],
+      ['品牌管理中心', '新媒体运营', 'new_media_ops'],
+      ['品牌管理中心', '平面设计师', 'graphic_designer'],
+      ['品牌管理中心', '平面设计助理', 'graphic_designer_asst'],
+      ['品牌管理中心', '3D动画设计师', '3d_animator'],
+      ['品牌管理中心', '社交媒体经理', 'social_media_mgr'],
+      // 交付管理中心
+      ['交付管理中心', '副总经理', 'delivery_vp'],
+      ['交付管理中心', '品质主管', 'quality_supervisor'],
+      ['交付管理中心', '品质专员', 'quality_specialist'],
+      ['交付管理中心', '技术主管', 'tech_supervisor'],
+      ['交付管理中心', 'LED结构工程师', 'led_struct_engineer'],
+      ['交付管理中心', '仓管专员', 'warehouse_specialist'],
+      ['交付管理中心', '采购专员', 'procurement_specialist'],
+      ['交付管理中心', 'PMC主管', 'pmc_supervisor'],
+      ['交付管理中心', 'PMC专员', 'pmc_specialist'],
+      ['交付管理中心', '售后工程师', 'after_sales_engineer'],
+      ['交付管理中心', '售后助理工程师', 'after_sales_asst'],
+      ['交付管理中心', '沙特仓管', 'saudi_warehouse'],
+      ['交付管理中心', '国际售后工程师', 'intl_after_sales'],
+      // 研发中心
+      ['研发中心', '研发总监', 'rd_director'],
+      ['研发中心', '结构工程师', 'structural_engineer'],
+      ['研发中心', '电子工程师', 'electronic_engineer'],
+      ['研发中心', '工程师助理', 'engineer_asst'],
+      // 销售运营中心
+      ['销售运营中心', '销售总监', 'sales_director'],
+      ['销售运营中心', '销售主管', 'sales_supervisor'],
+      ['销售运营中心', '海外销售', 'sales_overseas'],
+      ['销售运营中心', '外贸跟单', 'sales_merchandiser'],
+      ['销售运营中心', '日语跟单', 'sales_japanese_merch'],
+      ['销售运营中心', '阿里运营专员', 'sales_ali_ops'],
+      ['销售运营中心', '售后工程师', 'sales_after_sales'],
+      ['销售运营中心', '售后经理', 'sales_after_sales_mgr'],
+      ['销售运营中心', '国际售后工程师', 'sales_intl_after_sales'],
+      ['销售运营中心', '常驻海外销售', 'sales_resident'],
+      ['销售运营中心', '销售组长', 'sales_leader'],
+      ['销售运营中心', '售后组长', 'sales_after_sales_lead'],
     ];
-    return generateMultiSheetExcel([{
-      name: '员工花名册',
-      title: '员工花名册导入模板（必填：用户名/姓名）',
-      headers,
-      data: sampleRows,
-    }]);
+
+    const teamHeaders = ['小组/战区中文名', '小组代码'];
+    const teamData = [
+      ['日韩运营组', 'ops_jk'],
+      ['印度运营组', 'ops_india'],
+      ['中东运营组', 'ops_me'],
+      ['欧亚运营组', 'ops_ea'],
+      ['巴伊运营组', 'ops_bay'],
+    ];
+
+    // 员工数据 Sheet（必填 + 常用字段）
+    const dataHeaders = [
+      '用户名*', '姓名', '密码', '部门', '职位', '小组/战区',
+      '性别', '年龄', '电话', '邮箱', '毕业院校',
+      '入职日期', '在职状态', '组织角色',
+    ];
+    const dataSampleRows = [
+      ['zhangsan', '张三', '123456', '销售运营中心', '海外销售', '中东运营组',
+       '男', '28', '13800138000', 'zhang@enbon.com', '深圳大学',
+       '2025-01-15', '在职', '普通成员'],
+      ['lisi', '李四', '123456', '研发中心', '电子工程师', '',
+       '女', '30', '13900139000', 'li@enbon.com', '清华大学',
+       '2025-03-01', '在职', '普通成员'],
+      ['wangwu', '王五', '123456', '人力资源中心', '人资总监', '',
+       '男', '35', '13700137000', 'wang@enbon.com', '',
+       '2024-06-01', '在职', '部门负责人'],
+      ['zhaoliu', '赵六', '123456', '销售运营中心', '销售组长', '日韩运营组',
+       '女', '26', '13600136000', 'zhao@enbon.com', '',
+       '2025-02-10', '在职', '小组负责人'],
+    ];
+
+    return generateMultiSheetExcel([
+      {
+        name: '填写说明',
+        title: '员工花名册导入模板 — 填写说明',
+        headers: ['项目', '说明'],
+        data: [
+          ['用户名*', '必填。登录系统的唯一用户名，不可重复（字母、数字、下划线组合）'],
+          ['姓名', '员工的姓名或昵称'],
+          ['密码', '登录密码（新增时必填；更新时留空则保留原密码）'],
+          ['部门', '填写部门中文名，如：销售运营中心、人力资源中心等（参考【部门代码】Sheet）'],
+          ['职位', '填写职位中文名，如：海外销售、财务专员等（参考【职位代码】Sheet）'],
+          ['小组/战区', '仅销售运营中心员工需填写，如：日韩运营组、印度运营组、中东运营组等（参考【小组战区】Sheet）'],
+          ['性别', '男 / 女'],
+          ['年龄', '数字，如：28'],
+          ['电话', '手机号'],
+          ['邮箱', '电子邮箱'],
+          ['毕业院校', '毕业学校名称'],
+          ['入职日期', '格式：2025-01-15'],
+          ['在职状态', '在职 / 离职 / 请假 / 停职'],
+          ['组织角色', '普通成员 / 小组负责人 / 部门负责人'],
+        ],
+      },
+      {
+        name: '部门代码',
+        title: '部门代码参考（填写【部门】列时使用）',
+        headers: deptHeaders,
+        data: deptData,
+      },
+      {
+        name: '职位代码',
+        title: '职位代码参考（填写【职位】列时使用）',
+        headers: posHeaders,
+        data: posData,
+      },
+      {
+        name: '小组战区',
+        title: '小组/战区代码参考（仅销售运营中心员工需填写）',
+        headers: teamHeaders,
+        data: teamData,
+      },
+      {
+        name: '员工数据',
+        title: '员工数据（请在此Sheet中填写或粘贴数据，不要修改其他Sheet）',
+        headers: dataHeaders,
+        data: dataSampleRows,
+      },
+    ]);
   }
 
   /**
    * 批量导入员工（upsert：按用户名唯一约束）
+   * 支持所有架构字段（部门代码/职位代码/小组战区/组织角色等）
    */
   async importHrEmployees(
     buffer: Buffer | undefined,
@@ -309,59 +577,109 @@ export class ExcelImportService {
 
     for (let i = 0; i < records.length; i++) {
       const raw = records[i];
-      const rowNum = i + 2; // Excel 行号从1开始，表头是第1行
+      const rowNum = i + 2;
       try {
         const username = String(raw.username || '').trim();
         if (!username) {
-          // 列出非空字段，帮助用户定位问题
           const nonEmpty = Object.entries(raw).filter(([, v]) => String(v).trim()).map(([k]) => k).join(', ');
-          errors.push(`第${rowNum}行：缺少"用户名"列（当前有内容的列：${nonEmpty || '无'}），已跳过`);
+          errors.push(`第${rowNum}行：缺少"用户名"（当前有内容的列：${nonEmpty || '无'}），已跳过`);
           skipped++;
           continue;
         }
+
+        // 部门映射
+        const deptName = String(raw.department || '').trim();
+        const deptRaw = this.DEPT_MAP[deptName] || deptName;
+
+        // 职位映射（传入部门名消除歧义）
+        const posName = String(raw.position || '').trim();
+        const position = this.resolvePosition(posName, deptName);
+
+        // 小组/战区映射
+        const team = this.resolveTeam(raw.team as string);
 
         // 性别映射
         const genderRaw = String(raw.gender || '').trim();
         const gender = this.GENDER_MAP[genderRaw] || this.GENDER_MAP[genderRaw.toLowerCase()] || 'other';
 
-        // 状态映射
+        // 在职状态映射
         const statusRaw = String(raw.employmentStatus || 'active').trim();
         const employmentStatus = this.STATUS_MAP[statusRaw] || this.STATUS_MAP[statusRaw.toLowerCase()] || 'active';
 
-        // 入职日期标准化
+        // 组织角色映射
+        const orgRoleRaw = String(raw.orgRoleType || 'staff').trim();
+        const orgRoleType = this.ORG_ROLE_MAP[orgRoleRaw] || this.ORG_ROLE_MAP[orgRoleRaw.toLowerCase()] || 'staff';
+
+        // 年龄
+        const age = raw.age != null ? parseInt(String(raw.age), 10) : undefined;
+        if (raw.age != null && isNaN(age!)) {
+          errors.push(`第${rowNum}行：年龄"${raw.age}"不是有效数字，已跳过`);
+          skipped++;
+          continue;
+        }
+
+        // 入职日期
         let hireDate: string | null = null;
         if (raw.hireDate) {
           const d = new Date(raw.hireDate);
           if (!isNaN(d.getTime())) hireDate = d.toISOString().split('T')[0];
         }
 
-        // 查询是否已有该用户名
+        // 直接上级（按用户名查 ID）
+        let directLeaderId: number | null = null;
+        if (raw.directLeaderId) {
+          const leaderName = String(raw.directLeaderId).trim();
+          if (leaderName) {
+            const leader = await this.userRepo.findOne({ where: { username: leaderName } });
+            directLeaderId = leader?.id ?? null;
+          }
+        }
+
+        // 查询是否已有该用户
         let existing = await this.userRepo.findOne({ where: { username } });
+        const password = raw.password ? String(raw.password).trim() : undefined;
 
         if (existing) {
           // 更新已有用户
           existing.nickname = String(raw.nickname || '').trim() || existing.nickname;
-          (existing as any).department = raw.department ? String(raw.department).trim() : existing.department;
-          existing.position = raw.position ? String(raw.position).trim() : existing.position;
+          (existing as any).department = deptRaw as any || existing.department;
+          existing.position = position || existing.position;
+          if (team !== null) existing.team = team;
           existing.phone = raw.phone ? String(raw.phone).trim() : existing.phone;
           existing.email = raw.email ? String(raw.email).trim() : existing.email;
           existing.gender = gender as any;
+          if (age !== undefined) (existing as any).age = age;
           if (hireDate) (existing as any).hireDate = hireDate;
           existing.employmentStatus = employmentStatus as any;
+          (existing as any).school = raw.school ? String(raw.school).trim() : (existing as any).school;
+          (existing as any).orgRoleType = orgRoleType as any;
+          if (directLeaderId !== null) existing.directLeaderId = directLeaderId;
+          if (password) existing.password = password; // 仅当提供了密码才更新
           await this.userRepo.save(existing);
           updated++;
         } else {
-          // 新增用户（默认密码123456，后续应强制修改）
+          // 新增用户
+          if (!password) {
+            errors.push(`第${rowNum}行：新增用户"${username}"缺少密码，已跳过`);
+            skipped++;
+            continue;
+          }
           const entity = this.userRepo.create({
             username,
             nickname: String(raw.nickname || username).trim(),
-            department: raw.department ? String(raw.department).trim() : null,
-            position: raw.position ? String(raw.position).trim() : null,
+            password,
+            department: (deptRaw || 'general_office') as any,
+            position: position || null,
+            team: team,
             phone: raw.phone ? String(raw.phone).trim() : null,
             email: raw.email ? String(raw.email).trim() : null,
             gender: gender as any,
+            age: age,
             hireDate,
             employmentStatus: employmentStatus as any,
+            school: raw.school ? String(raw.school).trim() : null,
+            orgRoleType: orgRoleType as any,
+            directLeaderId,
             role: 'employee' as any,
           } as any);
           await this.userRepo.save(entity);

@@ -104,8 +104,11 @@ export class CrmEmail {
   conversationId: string; // 会话ID（用于邮件往来线程展示）
 
   // ========== 时间戳 ==========
-  @Column({ type: 'datetime', nullable: true })
+  @Column({ type: 'timestamp', nullable: true })
   emailDate: Date; // 邮件发送时间（来自邮件头）
+
+  @Column({ default: false })
+  isDeleted: boolean; // 软删除标记
 
   @CreateDateColumn()
   createdAt: Date;
