@@ -34,7 +34,6 @@ import { ImportHistoryModule } from './modules/import-history/import-history.mod
 import { ScheduleModule } from '@nestjs/schedule';
 import { AuditModule } from './modules/audit/audit.module';
 import { EmailModule } from './common/email/email.module';
-import { StorageModule } from './modules/storage/storage.module';
 
 @Module({
   imports: [
@@ -72,7 +71,6 @@ import { StorageModule } from './modules/storage/storage.module';
     ExcelImportModule,
     ImportHistoryModule,
     AuditModule,
-    StorageModule,
   ],
   controllers: [AppController],
   providers: [
