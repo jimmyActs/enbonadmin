@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, VersionColumn, Index } from 'typeorm';
 
 /**
  * 客户星级枚举
@@ -115,6 +115,7 @@ export class CrmCustomer {
   tags: string; // 客户标签，JSON 数组序列化存储，如 ["重点客户", "高意向", "长期合作"]
 
   // ========== 归属信息 ==========
+  @Index()
   @Column({ type: 'integer', nullable: true })
   ownerId: number | null; // 当前负责人（销售）
 
@@ -131,6 +132,7 @@ export class CrmCustomer {
   lastContact: Date | null; // 最近联系时间（主动联系客户的记录时间）
 
   // ========== 公海机制 ==========
+  @Index()
   @Column({ default: false })
   isInPool: boolean; // 是否在公海中
 
@@ -154,9 +156,10 @@ export class CrmCustomer {
   @Column({ type: 'text', nullable: true })
   rejectReason: string | null; // 丢单原因（状态变为 lost 时填写）
 
-  @Column({ type: 'integer', default: 1 })
-  version: number; // 乐观锁版本号，防止并发抢客
+  @VersionColumn()
+  version: number;
 
+  @Index()
   @Column({ default: false })
   isDeleted: boolean; // 软删除标记
 

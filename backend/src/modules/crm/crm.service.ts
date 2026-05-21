@@ -1328,19 +1328,30 @@ export class CrmService {
     return { data, total, page, pageSize };
   }
 
-  /** 认领公海商机 */
+  /** 认领公海商机（乐观锁防止并发抢商机） */
   async claimFromLeadPool(currentUser: any, id: number): Promise<CrmLead> {
-    const lead = await this.leadRepo.findOne({ where: { id, isInPool: true } });
-    if (!lead) throw new NotFoundException('公海商机不存在或已被认领');
+    const result = await this.leadRepo
+      .createQueryBuilder()
+      .update(CrmLead)
+      .set({
+        assignedTo: currentUser.id,
+        assignedAt: new Date(),
+        isInPool: false,
+        poolReason: null as any,
+        poolTime: null as any,
+        status: LeadStatus.QUALIFIED,
+      })
+      .where('id = :id AND isInPool = :isInPool', { id, isInPool: true })
+      .execute();
 
-    lead.assignedTo = currentUser.id;
-    lead.assignedAt = new Date();
-    lead.isInPool = false;
-    lead.poolReason = null;
-    lead.poolTime = null;
-    lead.status = LeadStatus.QUALIFIED;
+    if (result.affected === 0) {
+      const lead = await this.leadRepo.findOne({ where: { id } });
+      if (!lead) throw new NotFoundException('公海商机不存在');
+      if (lead.isInPool) throw new BadRequestException('商机已被他人认领，请刷新重试');
+      throw new BadRequestException('该商机不在公海中');
+    }
 
-    return this.leadRepo.save(lead);
+    return this.leadRepo.findOne({ where: { id } }) as Promise<CrmLead>;
   }
 
   /** 释放商机到公海 */

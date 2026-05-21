@@ -4,6 +4,7 @@ import {
   Column,
   CreateDateColumn,
   UpdateDateColumn,
+  Index,
 } from 'typeorm';
 
 @Entity('hr_performance_review')
@@ -11,9 +12,11 @@ export class HrPerformanceReview {
   @PrimaryGeneratedColumn()
   id: number;
 
+  @Index()
   @Column()
   cycleId: number;
 
+  @Index()
   @Column()
   employeeId: number;
 

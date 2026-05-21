@@ -86,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Grid, Search, Refresh, Pointer } from '@element-plus/icons-vue'
@@ -157,6 +157,8 @@ const renderStars = (r: number) => '★'.repeat(r || 0) + '☆'.repeat(5 - (r ||
 const formatDate = (d: string | null | undefined) => d ? new Date(d).toLocaleString(locale.value === 'zh-CN' ? 'zh-CN' : 'en-US') : '-'
 
 onMounted(() => { loadPool() })
+
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 </script>
 
 <style scoped lang="scss">

@@ -1,4 +1,4 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn } from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, Index } from 'typeorm';
 
 /**
  * 商机来源枚举
@@ -85,6 +85,7 @@ export class CrmLead {
   priority: LeadPriority; // 紧急程度
 
   // ========== 分配信息 ==========
+  @Index()
   @Column({ type: 'integer', nullable: true })
   assignedTo: number | null; // 被分配给哪个销售（负责人）
 
@@ -130,6 +131,7 @@ export class CrmLead {
   websiteId: number; // 来源网站配置ID
 
   // ========== 公海机制 ==========
+  @Index()
   @Column({ default: false })
   isInPool: boolean; // 是否在公海中（未分配）
 

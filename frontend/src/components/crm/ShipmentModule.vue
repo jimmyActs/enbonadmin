@@ -229,7 +229,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -428,6 +428,8 @@ const handleDelete = async (s: CrmShipmentFile) => {
 }
 
 onMounted(() => { loadShipments() })
+
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
 defineExpose({ reload: loadShipments })
 </script>

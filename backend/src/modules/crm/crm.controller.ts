@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  NotFoundException,
   Param,
   ParseIntPipe,
   Post,
@@ -678,8 +679,8 @@ export class CrmController {
   @RequirePermissions('crm.customer.view')
   async getQuotation(@Req() req: any, @Param('id', ParseIntPipe) id: number) {
     const ctx = this.getUserContext(req);
-    const quotation = this.crmQuotationService.findOne(id);
-    if (!quotation) throw new UnauthorizedException('报价单不存在');
+    const quotation = await this.crmQuotationService.findOne(id);
+    if (!quotation) throw new NotFoundException('报价单不存在');
     return quotation;
   }
 

@@ -36,7 +36,7 @@ export class PermissionsController {
    * 任何人可访问，无需登录
    */
   @Get('debug/permissions')
-  @Public()
+  @RequirePermissions('system.permission.view')
   async debugPermissions() {
     const allPerms = await this.permissionsService.getAllPermissions();
     return {
@@ -50,7 +50,7 @@ export class PermissionsController {
    * 任何人可访问，无需登录
    */
   @Get('debug/hr-director-perms')
-  @Public()
+  @RequirePermissions('system.permission.view')
   async debugHrDirectorPerms() {
     const allPerms = await this.permissionsService.getAllPermissions();
     const roles = await this.permissionsService.getAllRoles();
@@ -301,8 +301,8 @@ export class PermissionsController {
    * 诊断人资总监账号的权限状态
    * 返回该用户的详细权限信息，用于调试
    */
-  @Public()
   @Get('diagnostic/hr-director')
+  @RequirePermissions('system.permission.view')
   async diagnosticHrDirector() {
     // 查找人资总监用户
     const hrDirector = await this.usersService.findByUsername('hr_director');

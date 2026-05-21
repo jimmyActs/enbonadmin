@@ -1,12 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, Between, DeepPartial } from 'typeorm';
-
-/** 基于 ID 的确定性哈希，替代 Math.random()，保证同一员工每次调用结果一致 */
-function stableRandom(seed: number, offset = 0): number {
-  const x = Math.sin(seed * 9999 + offset) * 10000;
-  return x - Math.floor(x);
-}
 import { HrPerformanceCycle } from './entities/hr-performance-cycle.entity';
 import { HrPerformanceIndicator } from './entities/hr-performance-indicator.entity';
 import { HrPerformanceTemplate } from './entities/hr-performance-template.entity';
@@ -332,7 +326,7 @@ export class HrPerformanceService {
     // 构建员工潜力数据
     const employees = users.map(user => {
       const review = reviewMap.get(user.id);
-      const performanceScore = review?.finalScore || review?.supervisorScore || 60 + stableRandom(user.id) * 30;
+      const performanceScore = review?.finalScore || review?.managerScore;
       const potentialLevel = calculatePotential(user, review);
       const category = calculateCategory(performanceScore, potentialLevel);
 
@@ -387,13 +381,18 @@ export class HrPerformanceService {
       const userReviews = reviews.filter(r => r.employeeId === user.id);
       const latestReview = userReviews[0];
 
-      // 模拟各指标得分（实际应该从review.indicatorScores字段解析）
+      // 从实际评估数据解析各指标得分
       const scores: Record<number, number> = {};
-      indicators.forEach((ind, idx) => {
-        // 基于总分和权重分配各指标得分（使用 managerScore 替代 supervisorScore）
-        const baseScore = latestReview?.finalScore || latestReview?.managerScore || 70;
-        scores[ind.id] = Math.round((baseScore * (0.8 + stableRandom(ind.id, user.id) * 0.4)) * 10) / 10;
-      });
+      if (latestReview) {
+        const indicatorScores = (latestReview as any).indicatorScores;
+        if (indicatorScores && typeof indicatorScores === 'object') {
+          for (const ind of indicators) {
+            if (indicatorScores[ind.id] !== undefined) {
+              scores[ind.id] = Math.round(Number(indicatorScores[ind.id]) * 10) / 10;
+            }
+          }
+        }
+      }
 
       const totalScore = latestReview?.finalScore
         ? Math.round(latestReview.finalScore * 10) / 10

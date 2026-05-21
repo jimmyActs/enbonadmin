@@ -196,7 +196,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onBeforeUnmount, nextTick } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -464,6 +464,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('navigate-to-sales-tab', handleNavToSalesTab)
+  if (searchTimer) clearTimeout(searchTimer)
 })
 
 const handleNavToSalesTab = (e: Event) => {

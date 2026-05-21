@@ -794,19 +794,6 @@ export class HrController {
     return this.performanceService.updateIndicator(id, body);
   }
 
-  // 绩效模板
-  @Post('performance/templates')
-  @RequirePermissions('hr.performance.evaluate')
-  async createPerformanceTemplate(@Body() body: any) {
-    return this.performanceService.createTemplate(body);
-  }
-
-  @Get('performance/templates')
-  @RequirePermissions('hr.performance.view')
-  async listPerformanceTemplates() {
-    return this.performanceService.findAllTemplates();
-  }
-
   // 绩效评估
   @Post('performance/reviews')
   @RequirePermissions('hr.performance.self')

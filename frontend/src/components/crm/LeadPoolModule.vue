@@ -142,7 +142,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Grid, Search, Refresh, Plus } from '@element-plus/icons-vue'
@@ -282,6 +282,8 @@ const handleAutoAssign = async () => {
 }
 
 onMounted(() => { loadLeadPool() })
+
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 </script>
 
 <style scoped lang="scss">

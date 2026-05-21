@@ -234,7 +234,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -490,6 +490,8 @@ const handleDelete = async (lead: CrmLead) => {
 }
 
 onMounted(() => { loadLeads(); loadStats(); if (isAdmin.value) loadSalesUsers() })
+
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 </script>
 
 <style scoped lang="scss">

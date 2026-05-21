@@ -152,7 +152,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Message, Search, Refresh, Edit, Upload } from '@element-plus/icons-vue'
@@ -335,6 +335,8 @@ const formatDate = (d: string | null | undefined) => d
   : '-'
 
 onMounted(() => { loadEmails() })
+
+onBeforeUnmount(() => { if (searchTimer) clearTimeout(searchTimer) })
 
 defineExpose({ reload: loadEmails })
 </script>

@@ -171,7 +171,7 @@ import { useI18n } from 'vue-i18n'
 import { ElMessage } from 'element-plus'
 import { Plus, View, Switch } from '@element-plus/icons-vue'
 import * as echarts from 'echarts'
-import { getExits, getExitStats, createExit, type HrEmployeeExit, type ExitStats } from '../../api/hr'
+import { getExits, getExitStats, createExit, searchEmployees as searchEmployeesApi, type HrEmployeeExit, type ExitStats } from '../../api/hr'
 
 const { t } = useI18n()
 
@@ -254,12 +254,10 @@ const searchEmployees = async (query: string) => {
   }
   searching.value = true
   try {
-    // 模拟员工搜索，实际应调用员工接口
-    employeeOptions.value = [
-      { id: 1, name: query || '张三' },
-      { id: 2, name: '李四' },
-      { id: 3, name: '王五' },
-    ]
+    const results = await searchEmployeesApi({ keyword: query, limit: 20 })
+    employeeOptions.value = results.map(e => ({ id: e.id, name: e.name }))
+  } catch {
+    employeeOptions.value = []
   } finally {
     searching.value = false
   }

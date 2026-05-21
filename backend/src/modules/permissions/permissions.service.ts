@@ -754,6 +754,24 @@ export class PermissionsService implements OnModuleInit {
   }
 
   /**
+   * 获取用户的有效权限码（合并 RBAC + PositionEngine 岗位权限）
+   * 用于 AuthGuard 权限校验
+   */
+  async getEffectivePermissionCodes(userId: number, positionCode?: string): Promise<string[]> {
+    const rbacPerms = await this.getUserPermissions(userId);
+    if (!positionCode) return rbacPerms;
+
+    try {
+      const positionPerms = await this.permissionEngineService.getPositionPermissionList(positionCode);
+      const positionPermCodes = positionPerms.map(p => p.permissionCode).filter(Boolean);
+      const merged = new Set([...rbacPerms, ...positionPermCodes]);
+      return Array.from(merged);
+    } catch {
+      return rbacPerms;
+    }
+  }
+
+  /**
    * 获取系统中所有权限码（用于超级管理员）
    */
   async getAllPermissionCodes(): Promise<string[]> {

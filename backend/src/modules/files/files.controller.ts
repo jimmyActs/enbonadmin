@@ -129,30 +129,36 @@ export class FilesController {
     @Query('driveId') driveId: string,
     @Query('path') filePath: string,
     @Res() res: Response,
+    @Req() req: Request,
   ) {
     try {
-      console.log('预览文件请求:', { driveId, filePath });
+      // 验证用户身份
+      const user = await this.getUserFromRequest(req);
+      if (!user) {
+        throw new UnauthorizedException('请先登录');
+      }
 
-      // 为了避免在部分环境下 getDriveInfo 误报“盘不存在”，这里采用更直接、容错性更高的方式：
-      // 1) 仍然优先尝试通过 FilesService 获取盘信息；
-      // 2) 如果获取失败，则退回到根据 driveId 推导盘符（例如 d -> D:\）；
-      // 3) 使用最终确定的盘根路径 drivePath 拼接文件完整路径。
+      console.log('预览文件请求:', { driveId, filePath, userId: user.id });
+
       const driveInfo = await this.filesService.getDriveInfo(driveId);
-      const letter = (driveId || 'd').charAt(0).toUpperCase();
-      const fallbackRoot = `${letter}:\\`;
-      const drivePath = driveInfo?.path ?? fallbackRoot;
+      if (!driveInfo) {
+        throw new NotFoundException('盘不存在');
+      }
 
-      // 解码路径（前端可能进行了URL编码），并拼接到盘根目录下
+      // 仅使用数据库配置的路径，不使用从driveId推导的fallback
+      const drivePath = driveInfo.path;
+
+      // 解码路径，并拼接到盘根目录下
       const decodedPath = decodeURIComponent(filePath || '');
       const fullPath = path.resolve(path.join(drivePath, decodedPath));
-      
+
       console.log('预览文件路径:', {
         originalPath: filePath,
         decodedPath: decodedPath,
         drivePath,
         fullPath,
       });
-      
+
       // 安全检查：确保路径在drive.path下
       const normalizedDrivePath = path.resolve(drivePath);
       if (!fullPath.startsWith(normalizedDrivePath)) {
@@ -264,9 +270,15 @@ export class FilesController {
     @Query('driveId') driveId: string,
     @Query('path') filePath: string,
     @Res() res: Response,
+    @Req() req: Request,
   ) {
     try {
-      console.log('缩略图请求:', { driveId, filePath });
+      const user = await this.getUserFromRequest(req);
+      if (!user) {
+        throw new UnauthorizedException('请先登录');
+      }
+
+      console.log('缩略图请求:', { driveId, filePath, userId: user.id });
 
       // 复用下载路径解析逻辑，确保与下载一致
       const fullPath = await this.filesService.getDownloadPath(driveId, filePath);
@@ -452,9 +464,11 @@ export class FilesController {
         fileName = `file_${Date.now()}${ext}`;
         console.log('使用后备文件名:', fileName);
       } else {
-        // 清理文件名中的非法字符（保留中文字符和其他合法字符）
+        // 清理文件名中的非法字符和路径穿越字符
         // Windows 文件名不允许的字符: < > : " / \ | ? *
         fileName = fileName.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+        // 移除路径分隔符防止路径穿越
+        fileName = fileName.replace(/\.\./g, '_');
         
         // 移除文件名首尾的空格和点号（Windows不允许）
         fileName = fileName.trim().replace(/^\.+|\.+$/g, '');
@@ -490,6 +504,12 @@ export class FilesController {
       // 确保路径是绝对路径且正确格式化
       // 使用 path.resolve 来确保路径是绝对路径，这对于 Windows 路径很重要
       targetDirPath = path.resolve(targetDirPath);
+
+      // 路径穿越安全检查：确保目标路径在驱动器根路径内
+      const normalizedDrivePath = path.resolve(drive.path);
+      if (!targetDirPath.startsWith(normalizedDrivePath)) {
+        throw new ForbiddenException('访问路径不在允许范围内');
+      }
       
       console.log('=== 文件上传调试信息 ===');
       console.log('原始 targetDir:', JSON.stringify(targetDir));
@@ -635,10 +655,16 @@ export class FilesController {
     @Query('driveId') driveId: string,
     @Query('path') filePath: string,
     @Res() res: Response,
+    @Req() req: Request,
   ) {
+    const user = await this.getUserFromRequest(req);
+    if (!user) {
+      throw new UnauthorizedException('请先登录');
+    }
+
     const fullPath = await this.filesService.getDownloadPath(driveId, filePath);
     const fileName = path.basename(fullPath);
-    
+
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(fileName)}"`);
     res.sendFile(fullPath);
   }

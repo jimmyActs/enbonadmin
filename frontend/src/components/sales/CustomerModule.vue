@@ -677,7 +677,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
@@ -1401,6 +1401,11 @@ onMounted(() => {
   if (canViewTeam.value) {
     loadTeamMembers()
   }
+})
+
+onBeforeUnmount(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+  if (recycleSearchTimer) clearTimeout(recycleSearchTimer)
 })
 
 const reload = () => loadCustomers()

@@ -4,6 +4,7 @@ import { AppModule } from './app.module';
 import * as express from 'express';
 import * as fs from 'fs';
 import { join } from 'path';
+import helmet from 'helmet';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
@@ -11,6 +12,9 @@ async function bootstrap() {
 
   const isProduction = process.env.NODE_ENV === 'production';
   const isDev = process.env.NODE_ENV === 'development';
+
+  // 安全响应头
+  app.use(helmet());
 
   // 全局异常过滤器
   app.useGlobalFilters(new GlobalExceptionFilter());

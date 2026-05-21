@@ -15,6 +15,7 @@ export interface UserContext {
   id: number;
   role: string;
   department?: string;
+  position?: string;
   orgRoleType?: string;
   isSuperAdmin: boolean;
   /** 权限码列表（来自 RBAC 表） */
@@ -65,6 +66,7 @@ export class AuthGuard implements CanActivate {
       sub: number;
       role: string;
       department?: string;
+      position?: string;
       orgRoleType?: string;
     };
 
@@ -86,19 +88,20 @@ export class AuthGuard implements CanActivate {
     }
     const isSuperAdmin = isByRole || isByTemplate;
 
-    // === 3. 查询用户权限 ===
+    // === 3. 查询用户权限（合并 RBAC + PositionEngine） ===
     let permissions: string[] = [];
     try {
       if (isSuperAdmin) {
-        // 超级管理员：强制获取全部权限码
         permissions = await this.permissionsService.getAllPermissionCodes();
       } else {
-        permissions = await this.permissionsService.getUserEffectivePermissions(payload.sub);
+        permissions = await this.permissionsService.getEffectivePermissionCodes(
+          payload.sub,
+          payload.position,
+        );
       }
       console.log(`[AuthGuard] uid=${payload.sub} isSuperAdmin=${isSuperAdmin} permissions.length=${permissions.length}`, permissions.slice(0, 5));
     } catch (e) {
       console.error(`[AuthGuard] uid=${payload.sub} 查权限异常:`, e.message);
-      // 查权限失败时，超级管理员走 isSuperAdmin 路线放行，普通用户则 permissions = []
       if (!isSuperAdmin) {
         permissions = [];
       }
@@ -109,6 +112,7 @@ export class AuthGuard implements CanActivate {
       id: payload.sub,
       role: payload.role,
       department: payload.department,
+      position: payload.position,
       orgRoleType: payload.orgRoleType,
       isSuperAdmin,
       permissions,

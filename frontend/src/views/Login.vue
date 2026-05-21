@@ -91,21 +91,19 @@ const loadRememberedLogin = () => {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (!raw) return
-    const saved = JSON.parse(raw) as { username?: string; password?: string; remember?: boolean }
+    const saved = JSON.parse(raw) as { username?: string; remember?: boolean }
     loginForm.username = saved.username || ''
-    loginForm.password = saved.password || ''
     loginForm.remember = !!saved.remember
   } catch (e) {
     console.warn('读取本地登录信息失败，已忽略:', e)
   }
 }
 
-// 保存当前登录信息到本地
+// 保存当前登录信息到本地（仅保存用户名，不保存密码）
 const saveRememberedLogin = () => {
   if (loginForm.remember) {
     const payload = {
       username: loginForm.username,
-      password: loginForm.password,
       remember: true,
     }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
